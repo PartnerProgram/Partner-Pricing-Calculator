@@ -20,9 +20,11 @@
       items: [
         { id: cryptoRandomId(), productKey: 'rct', endpointsText: '1000', addSupport: false, pricingModel: 'endpoint' }
       ],
-      activeTab: 'customer',
+      activeTab: 'partner',
       copied: false,
-      showBreakdown: false
+      showBreakdown: false,
+      partnerNewMargin: 25,
+      partnerRenMargin: 15
     };
     /* =======================
        DATA
@@ -125,10 +127,10 @@
         support,
         totalARR,
         msrp,
-        partnerNewPrice: msrp * 0.75,
-        partnerRenPrice: msrp * 0.85,
-        marginNew$: msrp * 0.25,
-        marginRen$: msrp * 0.15,
+        partnerNewPrice: msrp * (1 - STATE.partnerNewMargin / 100),
+        partnerRenPrice: msrp * (1 - STATE.partnerRenMargin / 100),
+        marginNew$: msrp * (STATE.partnerNewMargin / 100),
+        marginRen$: msrp * (STATE.partnerRenMargin / 100),
         addSupport: !!item.addSupport,
         lines,
         isUserMode
@@ -165,13 +167,11 @@
           </div>
           <p class="mx-auto max-w-6xl mt-2 max-w-2xl text-base text-gray-700 leading-relaxed">Estimate only. Not a formal quote.</p>
           <div class="mx-auto max-w-6xl mt-6 hidden sm:flex w-full rounded-full bg-gray-100 p-1 gap-1">
-            ${tabBtn('customer','Customer Pricing')}
             ${tabBtn('partner','Partner Pricing')}
             ${tabBtn('sla','Support SLA')}
           </div>
           <div class="mx-auto max-w-6xl mt-6 sm:hidden">
             <select class="w-full rounded-full border border-gray-300 bg-white px-4 py-2 text-sm" data-action="switch-mobile">
-              <option value="customer" ${STATE.activeTab==='customer'?'selected':''}>Customer Pricing</option>
               <option value="partner" ${STATE.activeTab==='partner'?'selected':''}>Partner Pricing</option>
               <option value="sla" ${STATE.activeTab==='sla'?'selected':''}>Support SLA</option>
             </select>
@@ -184,7 +184,6 @@
             ${kpiCard('Base ARR', money(m.totals.baseARR), 'badge-dollar-sign')}
           </section>
           <section class="mt-6">
-            ${STATE.activeTab==='customer' ? renderCustomer(m) : ''}
             ${STATE.activeTab==='partner' ? renderPartner(m) : ''}
             ${STATE.activeTab==='sla' ? renderSLA() : ''}
           </section>
@@ -278,87 +277,18 @@
         </div>
       `;
     }
-    function renderCustomer(m){
-      return `
-        <section id="panel-customer" role="tabpanel" aria-labelledby="tab-customer" class="space-y-6">
-          <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
-            <h3 class="text-xl font-medium">Customer Quote</h3>
-            <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
-              <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50 text-gray-500">
-                  <tr>
-                    <th class="px-4 py-3 text-left font-medium">Product</th>
-                    <th class="px-4 py-3 text-left font-medium">Quantity</th>
-                    <th class="px-4 py-3 text-left font-medium">Base ARR</th>
-                    <th class="px-4 py-3 text-left font-medium">Platform Fee</th>
-                    <th class="px-4 py-3 text-left font-medium">Premium Support</th>
-                    <th class="px-4 py-3 text-left font-medium">Line Total (MSRP)</th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                  ${m.items.map(it => `
-                    <tr>
-                      <td class="px-4 py-3 text-gray-900">${it.productName}</td>
-                      <td class="px-4 py-3 text-gray-900">${it.endpoints.toLocaleString()}</td>
-                      <td class="px-4 py-3 font-mono text-gray-900">${money(it.baseARR)}</td>
-                      <td class="px-4 py-3 text-gray-900">${it.platformWaived ? '— (waived)' : `<span class="font-mono">${money(it.platformFeeApplied)}</span>`}</td>
-                      <td class="px-4 py-3 text-gray-900">${it.addSupport ? `<span class="font-mono">${money(it.support)}</span>` : '—'}</td>
-                      <td class="px-4 py-3 font-mono text-gray-900">${money(it.totalARR)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-                <tfoot class="bg-gray-50">
-                  <tr>
-                    <th class="px-4 py-3 text-right font-medium" colspan="2">Totals</th>
-                    <th class="px-4 py-3 text-left font-mono text-gray-900">${money(m.totals.baseARR)}</th>
-                    <th class="px-4 py-3 text-left font-mono text-gray-900">${money(m.totals.platform)}</th>
-                    <th class="px-4 py-3 text-left font-mono text-gray-900">${money(m.totals.support)}</th>
-                    <th class="px-4 py-3 text-left font-mono text-gray-900">${money(m.totals.msrp)}</th>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <button type="button" class="mt-4 inline-flex items-center gap-2 text-sm bg-[#2563eb] hover:bg-blue-700 text-white rounded-full px-4 py-2 shadow-sm transition-shadow duration-300" data-action="toggle-breakdown" aria-expanded="${STATE.showBreakdown}">
-              <i data-lucide="${STATE.showBreakdown?'chevron-up':'chevron-down'}" class="w-4 h-4"></i>
-              ${STATE.showBreakdown ? 'Hide tier calculation' : 'Show tier calculation'}
-            </button>
-            <div id="breakdown" class="${STATE.showBreakdown ? 'mt-4 space-y-4' : 'hidden'}">
-              ${m.items.map(it => tierTable(it)).join('')}
-            </div>
-          </div>
-        </section>
-      `;
-    }
-    function tierTable(it){
-      return `
-        <div class="overflow-x-auto rounded-lg border border-gray-200">
-          <table class="min-w-full divide-y divide-gray-200 text-sm">
-            <caption class="text-left px-4 py-3 bg-gray-50 font-medium text-gray-900">${it.productName} — ${it.endpoints.toLocaleString()} ${it.isUserMode ? 'users' : 'endpoints'}</caption>
-            <thead class="bg-gray-50 text-gray-500">
-              <tr><th class="px-4 py-3 text-left font-medium">Band</th><th class="px-4 py-3 text-left font-medium">Units</th><th class="px-4 py-3 text-left font-medium">$ / Unit</th><th class="px-4 py-3 text-left font-medium">Extended</th></tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              ${it.lines.map(r=>`
-                <tr>
-                  <td class="px-4 py-3 text-gray-900">${r.band}</td>
-                  <td class="px-4 py-3 text-gray-900">${r.units.toLocaleString()}</td>
-                  <td class="px-4 py-3 font-mono text-gray-900">${money(r.rate)}</td>
-                  <td class="px-4 py-3 font-mono text-gray-900">${money(r.extended)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-            <tfoot class="bg-gray-50">
-              <tr><th class="px-4 py-3 text-right font-medium" colspan="3">Base ARR Subtotal</th><th class="px-4 py-3 text-left font-mono text-gray-900">${money(it.baseARR)}</th></tr>
-            </tfoot>
-          </table>
-        </div>
-      `;
-    }
     function renderPartner(m){
       return `
         <section id="panel-partner" role="tabpanel" aria-labelledby="tab-partner" class="space-y-6">
           <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
             <h3 class="text-xl font-medium">Partner Quote (Per Line Item)</h3>
+            
+            <div class="flex flex-wrap gap-3 mb-4">
+              <button type="button" data-action="set-tier" data-tier="1" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===25 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">25% Tier 1</button>
+              <button type="button" data-action="set-tier" data-tier="2" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===15 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">15% Tier 2</button>
+              <button type="button" data-action="set-tier" data-tier="3" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===5 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">5% Tier 3</button>
+            </div>
+
             <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
               <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-gray-500">
@@ -380,10 +310,10 @@
                       <td class="px-4 py-3 text-gray-900">${it.productName}</td>
                       <td class="px-4 py-3 text-gray-900">${it.endpoints.toLocaleString()}</td>
                       <td class="px-4 py-3 font-mono text-gray-900">${money(it.msrp)}</td>
-                      <td class="px-4 py-3 text-gray-900">25%</td>
+                      <td class="px-4 py-3 text-gray-900">${STATE.partnerNewMargin}%</td>
                       <td class="px-4 py-3 font-mono text-gray-900">${money(it.marginNew$)}</td>
                       <td class="px-4 py-3 font-mono text-gray-900">${money(it.partnerNewPrice)}</td>
-                      <td class="px-4 py-3 text-gray-900">15%</td>
+                      <td class="px-4 py-3 text-gray-900">${STATE.partnerRenMargin}%</td>
                       <td class="px-4 py-3 font-mono text-gray-900">${money(it.marginRen$)}</td>
                       <td class="px-4 py-3 font-mono text-gray-900">${money(it.partnerRenPrice)}</td>
                     </tr>
@@ -575,6 +505,17 @@
       // Show/Hide tier breakdown
       const toggle = root.querySelector('[data-action="toggle-breakdown"]');
       if(toggle) toggle.addEventListener('click', () => { STATE.showBreakdown = !STATE.showBreakdown; render(); });
+
+      // Margin tier buttons (Renewal button removed)
+      root.querySelectorAll('[data-action="set-tier"]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const tier = e.currentTarget.getAttribute('data-tier');
+          if (tier === '1') { STATE.partnerNewMargin = 25; STATE.partnerRenMargin = 15; }
+          else if (tier === '2') { STATE.partnerNewMargin = 15; STATE.partnerRenMargin = 15; }
+          else if (tier === '3') { STATE.partnerNewMargin = 5; STATE.partnerRenMargin = 15; }
+          render();
+        });
+      });
     }
     function updateBreakdownTable(){ /* populated during render via tierTable per item */ }
     /* =======================
