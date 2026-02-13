@@ -282,13 +282,12 @@
         <section id="panel-partner" role="tabpanel" aria-labelledby="tab-partner" class="space-y-6">
           <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
             <h3 class="text-xl font-medium">Partner Pricing (Deal Registration Must Be Approved For Tier 1 / Tier 2*)</h3>
-            
+           
             <div class="flex flex-wrap gap-3 mb-4">
               <button type="button" data-action="set-tier" data-tier="1" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===25 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">25% Tier 1</button>
               <button type="button" data-action="set-tier" data-tier="2" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===15 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">15% Tier 2</button>
-              <button type="button" data-action="set-tier" data-tier="3" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===5 && STATE.partnerRenMargin===15 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">5% Tier 3</button>
+              <button type="button" data-action="set-tier" data-tier="3" class="${cx('px-5 py-2 rounded-full text-sm font-medium transition-all', STATE.partnerNewMargin===5 && STATE.partnerRenMargin===5 ? 'bg-[#2563eb] text-white shadow-sm' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700')}">5% Tier 3</button>
             </div>
-
             <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
               <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-gray-500">
@@ -506,13 +505,13 @@
       const toggle = root.querySelector('[data-action="toggle-breakdown"]');
       if(toggle) toggle.addEventListener('click', () => { STATE.showBreakdown = !STATE.showBreakdown; render(); });
 
-      // Margin tier buttons (Renewal button removed)
+      // Margin tier buttons
       root.querySelectorAll('[data-action="set-tier"]').forEach(btn => {
         btn.addEventListener('click', e => {
           const tier = e.currentTarget.getAttribute('data-tier');
           if (tier === '1') { STATE.partnerNewMargin = 25; STATE.partnerRenMargin = 15; }
           else if (tier === '2') { STATE.partnerNewMargin = 15; STATE.partnerRenMargin = 15; }
-          else if (tier === '3') { STATE.partnerNewMargin = 5; STATE.partnerRenMargin = 15; }
+          else if (tier === '3') { STATE.partnerNewMargin = 5; STATE.partnerRenMargin = 5; }
           render();
         });
       });
