@@ -5,351 +5,271 @@
   <title>Recast Pricing CPQ — Partner Estimator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    :root { --ring: 37 99 235; } /* blue-600 */
     .shadow-soft { box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06); }
     .shadow-softer { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 14px 40px rgba(0,0,0,.08); }
-    .mono-tabular { font-variant-numeric: tabular-nums; }
+    .mono { font-variant-numeric: tabular-nums; }
   </style>
 </head>
-<body class="min-h-screen bg-gradient-to-b from-[#f8fafc] to-[#ffffff] text-slate-900 antialiased">
-  <div id="app" class="min-h-screen"></div>
 
-  <script>
-    /* =======================
-       STATE + DATA
-    ======================= */
-    const STATE = {
-      items: [
-        { id: cryptoRandomId(), productKey: 'rct', qtyText: '1000', addSupport: false, pricingModel: 'endpoint' }
-      ],
-      partnerNewMargin: 25,
-      partnerRenMargin: 15,
-      modalOpen: false,
-      toast: null, // {type:'success'|'error', message:string}
-      activeTab: 'pricing', // pricing | sla
-    };
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <div id="app"></div>
 
-    const TIERS_BASE5 = [
-      { max: 1000, rate: 5.00 }, { max: 2000, rate: 4.50 }, { max: 3000, rate: 4.25 }, { max: 4000, rate: 4.00 }, { max: 5000, rate: 3.75 },
-      { max: 6000, rate: 3.50 }, { max: 7000, rate: 3.25 }, { max: 8000, rate: 3.00 }, { max: 9000, rate: 2.75 }, { max: 10000, rate: 2.50 },
-      { max: 15000, rate: 2.25 }, { max: 20000, rate: 2.00 }, { max: 25000, rate: 1.75 }, { max: 30000, rate: 1.50 }, { max: 40000, rate: 1.25 },
-      { max: 50000, rate: 1.00 }, { max: 60000, rate: 0.75 }, { max: 70000, rate: 0.50 }, { max: 80000, rate: 0.40 }, { max: 90000, rate: 0.35 },
-      { max: 100000, rate: 0.30 }, { max: 120000, rate: 0.25 }, { max: 140000, rate: 0.20 }, { max: 160000, rate: 0.15 }, { max: 180000, rate: 0.10 },
-      { max: 200000, rate: 0.05 }, { max: Infinity, rate: 0.10 }
-    ];
+<script>
+/* =======================
+   STATE
+======================= */
+const STATE = {
+  items: [
+    { id: randomId(), productKey: 'rct', qtyText: '1000', addSupport: false, pricingModel: 'endpoint' }
+  ],
+  partnerNewMargin: 25,
+  partnerRenMargin: 15,
+  toast: null
+};
 
-    const USER_TIERS_MONTHLY = [
-      { max: 999, rate: 4.00 },
-      { max: 4999, rate: 3.50 },
-      { max: 9999, rate: 3.00 },
-      { max: 24999, rate: 2.50 },
-      { max: 49999, rate: 2.00 },
-      { max: Infinity, rate: 1.50 }
-    ];
+/* =======================
+   DATA (restored from your original)
+======================= */
+const TIERS_BASE5 = [
+  { max: 1000, rate: 5.00 }, { max: 2000, rate: 4.50 }, { max: 3000, rate: 4.25 }, { max: 4000, rate: 4.00 }, { max: 5000, rate: 3.75 },
+  { max: 6000, rate: 3.50 }, { max: 7000, rate: 3.25 }, { max: 8000, rate: 3.00 }, { max: 9000, rate: 2.75 }, { max: 10000, rate: 2.50 },
+  { max: 15000, rate: 2.25 }, { max: 20000, rate: 2.00 }, { max: 25000, rate: 1.75 }, { max: 30000, rate: 1.50 }, { max: 40000, rate: 1.25 },
+  { max: 50000, rate: 1.00 }, { max: 60000, rate: 0.75 }, { max: 70000, rate: 0.50 }, { max: 80000, rate: 0.40 }, { max: 90000, rate: 0.35 },
+  { max: 100000, rate: 0.30 }, { max: 120000, rate: 0.25 }, { max: 140000, rate: 0.20 }, { max: 160000, rate: 0.15 }, { max: 180000, rate: 0.10 },
+  { max: 200000, rate: 0.05 }, { max: Infinity, rate: 0.10 }
+];
 
-    const PRODUCTS = {
-      rct:      { name: 'Right Click Tools (Core)', baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
-      patch:    { name: 'Patching',                 baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
-      insights: { name: 'Insights',                 baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
-      priv:     { name: 'Privilege Manager',        baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
-      aw_cloud: { name: 'Application Workspace — Direct Cloud',  baseFactor: 11/5, platformFee: 15000, minTotal: 26000 },
-      aw_onprem:{ name: 'Application Workspace — Direct On-Prem', baseFactor: 10/5, platformFee: 15000, minTotal: 25000 }
-    };
+const USER_TIERS_MONTHLY = [
+  { max: 999, rate: 4.00 },
+  { max: 4999, rate: 3.50 },
+  { max: 9999, rate: 3.00 },
+  { max: 24999, rate: 2.50 },
+  { max: 49999, rate: 2.00 },
+  { max: Infinity, rate: 1.50 }
+];
 
-    /* =======================
-       UTILS
-    ======================= */
-    function cx(...a){ return a.filter(Boolean).join(' '); }
-    function money(n){ return (!isFinite(n)) ? '—' : n.toLocaleString(undefined,{ style:'currency', currency:'USD' }); }
-    function digitsOnly(text){ return String(text ?? '').replace(/[^\d]/g,''); }
-    function int(n){
-      n = Number(String(n).replace(/[^0-9\-]/g,''));
-      return isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-    }
-    function clampFloor(r){ return Math.max(r, 0.10); }
-    function cryptoRandomId(){
-      try { return crypto.randomUUID(); } catch { return 'id-'+Math.random().toString(36).slice(2); }
-    }
-    function isAWProduct(key){ return key === 'aw_cloud' || key === 'aw_onprem'; }
-    function tiersFor(key){
-      const f = (PRODUCTS[key] || PRODUCTS.rct).baseFactor;
-      return TIERS_BASE5.map(t => ({ max: t.max, rate: clampFloor(+(t.rate * f).toFixed(4)) }));
-    }
-    function graduatedSubtotal(units, tiers){
-      let rem = Math.max(0, Math.floor(units)), from = 0, sum = 0, lines = [];
-      for(const b of tiers){
-        if(rem<=0) break;
-        const c = Math.min(rem, b.max - from);
-        const ext = c * b.rate;
-        sum += ext;
-        lines.push({ band: `${from+1}–${from+c}`, units: c, rate: b.rate, extended: ext });
-        rem -= c; from = b.max;
-      }
-      return { subtotal: sum, lines };
-    }
-    function premiumSupportCost(add, basePlusPlat){
-      return add ? Math.max(basePlusPlat * 0.20, 6000) : 0;
-    }
-    function setToast(type, message){
-      STATE.toast = { type, message };
-      render();
-      window.clearTimeout(setToast._t);
-      setToast._t = window.setTimeout(() => { STATE.toast = null; render(); }, 1800);
-    }
+const PRODUCTS = {
+  rct:      { name: 'Right Click Tools (Core)', baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
+  patch:    { name: 'Patching',                 baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
+  insights: { name: 'Insights',                 baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
+  priv:     { name: 'Privilege Manager',        baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
+  aw_cloud: { name: 'Application Workspace — Direct Cloud',  baseFactor: 11/5, platformFee: 15000, minTotal: 26000 },
+  aw_onprem:{ name: 'Application Workspace — Direct On-Prem', baseFactor: 10/5, platformFee: 15000, minTotal: 25000 }
+};
 
-    /* =======================
-       PRICING MODEL
-    ======================= */
-    function computeItem(item){
-      const meta = PRODUCTS[item.productKey] || PRODUCTS.rct;
-      const isAW = isAWProduct(item.productKey);
-      const isUserMode = isAW && item.pricingModel === 'user';
+/* =======================
+   UTILS
+======================= */
+function cx(...a){ return a.filter(Boolean).join(' '); }
+function isAW(key){ return key === 'aw_cloud' || key === 'aw_onprem'; }
+function digitsOnly(text){ return String(text ?? '').replace(/[^\d]/g,''); }
+function int(n){
+  n = Number(String(n).replace(/[^0-9\-]/g,''));
+  return isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+function clampFloor(r){ return Math.max(r, 0.10); }
+function money(n){ return (!isFinite(n)) ? '—' : n.toLocaleString(undefined,{ style:'currency', currency:'USD' }); }
+function randomId(){
+  try { return crypto.randomUUID(); } catch { return 'id-' + Math.random().toString(36).slice(2); }
+}
+function setToast(type, message){
+  STATE.toast = { type, message };
+  render();
+  clearTimeout(setToast._t);
+  setToast._t = setTimeout(() => { STATE.toast = null; render(); }, 1800);
+}
 
-      let units = int(item.qtyText);
+/* =======================
+   PRICING HELPERS
+======================= */
+function tiersFor(productKey){
+  const f = (PRODUCTS[productKey] || PRODUCTS.rct).baseFactor;
+  return TIERS_BASE5.map(t => ({ max: t.max, rate: clampFloor(+(t.rate * f).toFixed(4)) }));
+}
 
-      let baseARR, lines, platformFeeApplied, basePlusPlatform, support, platformWaived;
+function graduatedSubtotal(units, tiers){
+  let rem = Math.max(0, Math.floor(units));
+  let from = 0, sum = 0;
+  for(const b of tiers){
+    if(rem <= 0) break;
+    const chunk = Math.min(rem, b.max - from);
+    sum += chunk * b.rate;
+    rem -= chunk;
+    from = b.max;
+  }
+  return sum;
+}
 
-      if (isUserMode) {
-        units = Math.max(250, units);
-        const { subtotal: monthly, lines: monthlyLines } = graduatedSubtotal(units, USER_TIERS_MONTHLY);
-        baseARR = monthly * 12;
-        lines = monthlyLines.map(l => ({
-          band: l.band, units: l.units,
-          rate: l.rate * 12,
-          extended: l.extended * 12
-        }));
-        platformFeeApplied = 0;
-        platformWaived = true;
-        basePlusPlatform = baseARR;
-        support = 0; // explicitly not allowed in your current rules
-      } else {
-        const { subtotal, lines: endpointLines } = graduatedSubtotal(units, tiersFor(item.productKey));
-        baseARR = subtotal;
-        lines = endpointLines;
-        platformFeeApplied = baseARR >= 30000 ? 0 : meta.platformFee;
-        platformWaived = platformFeeApplied === 0;
-        basePlusPlatform = Math.max(baseARR + platformFeeApplied, meta.minTotal);
-        support = premiumSupportCost(!!item.addSupport, basePlusPlatform);
-      }
+function premiumSupportCost(add, basePlusPlat){
+  return add ? Math.max(basePlusPlat * 0.20, 6000) : 0;
+}
 
-      const totalARR = basePlusPlatform + support;
-      const msrp = totalARR;
+/* =======================
+   MODEL
+======================= */
+function computeItem(item){
+  const meta = PRODUCTS[item.productKey] || PRODUCTS.rct;
 
-      const partnerNewPrice = msrp * (1 - STATE.partnerNewMargin / 100);
-      const partnerRenPrice = msrp * (1 - STATE.partnerRenMargin / 100);
+  const aw = isAW(item.productKey);
+  const userMode = aw; // in this UX, AW is always per-user (matches your original implementation)
 
-      return {
-        id: item.id,
-        productKey: item.productKey,
-        productName: meta.name,
-        qty: units,
-        qtyLabel: (isUserMode ? 'Users' : 'Qty'),
-        isUserMode,
-        addSupport: !!item.addSupport,
+  let units = int(item.qtyText);
 
-        baseARR,
-        platformFeeApplied,
-        platformWaived,
-        basePlusPlatform,
-        support,
-        msrp,
+  let baseARR = 0;
+  let platformFeeApplied = 0;
+  let platformWaived = false;
+  let basePlusPlatform = 0;
+  let support = 0;
 
-        partnerNewPrice,
-        partnerRenPrice,
-        marginNew$: msrp * (STATE.partnerNewMargin / 100),
-        marginRen$: msrp * (STATE.partnerRenMargin / 100),
+  if(userMode){
+    units = Math.max(250, units);
+    const monthly = graduatedSubtotal(units, USER_TIERS_MONTHLY);
+    baseARR = monthly * 12;
 
-        lines
-      };
-    }
+    platformFeeApplied = 0;
+    platformWaived = true;
+    basePlusPlatform = baseARR;
 
-    function model(){
-      const items = STATE.items.map(computeItem);
-      const totals = items.reduce((a,it)=>({
-        qty: a.qty + it.qty,
-        baseARR: a.baseARR + it.baseARR,
-        platform: a.platform + it.platformFeeApplied,
-        support: a.support + it.support,
-        msrp: a.msrp + it.msrp,
-        partnerNew: a.partnerNew + it.partnerNewPrice,
-        partnerRen: a.partnerRen + it.partnerRenPrice,
-      }), { qty:0, baseARR:0, platform:0, support:0, msrp:0, partnerNew:0, partnerRen:0 });
+    // Premium support disabled in per-user AW pricing model (as in your original code)
+    support = 0;
+  } else {
+    const endpointTiers = tiersFor(item.productKey);
+    baseARR = graduatedSubtotal(units, endpointTiers);
 
-      return { items, totals };
-    }
+    platformFeeApplied = baseARR >= 30000 ? 0 : meta.platformFee;
+    platformWaived = platformFeeApplied === 0;
 
-    /* =======================
-       COPY QUOTE (professional paste)
-    ======================= */
-    function buildQuoteText(m){
-      const now = new Date();
-      const stamp = now.toLocaleString(undefined, { year:'numeric', month:'short', day:'2-digit' });
+    basePlusPlatform = Math.max(baseARR + platformFeeApplied, meta.minTotal);
+    support = premiumSupportCost(!!item.addSupport, basePlusPlatform);
+  }
 
-      const tierLabel =
-        (STATE.partnerNewMargin===25 && STATE.partnerRenMargin===15) ? 'Tier 1 (25% New / 15% Ren)' :
-        (STATE.partnerNewMargin===15 && STATE.partnerRenMargin===15) ? 'Tier 2 (15% New / 15% Ren)' :
-        (STATE.partnerNewMargin===5 && STATE.partnerRenMargin===5) ? 'Tier 3 (5% New / 5% Ren)' :
-        `Custom (${STATE.partnerNewMargin}% New / ${STATE.partnerRenMargin}% Ren)`;
+  const msrp = basePlusPlatform + support;
 
-      const lines = [];
-      lines.push(`RECAST PRICING ESTIMATE (Partner)`);
-      lines.push(`Generated: ${stamp}`);
-      lines.push(`Partner Tier: ${tierLabel}`);
-      lines.push(``);
-      lines.push(`LINE ITEMS`);
-      lines.push(`Product | Qty | MSRP (ARR) | Net New Partner (ARR) | Renewal Partner (ARR) | Notes`);
-      lines.push(`---|---:|---:|---:|---:|---`);
+  return {
+    id: item.id,
+    productKey: item.productKey,
+    productName: meta.name,
+    qty: units,
+    qtyLabel: userMode ? 'Users' : 'Endpoints',
+    userMode,
+    addSupport: !!item.addSupport && !userMode,
 
-      for (const it of m.items){
-        const notes = [
-          it.platformWaived ? `Platform: waived` : `Platform: ${money(it.platformFeeApplied)}`,
-          it.isUserMode ? `Pricing: per user (min 250)` : `Pricing: per endpoint`,
-          it.addSupport ? `Premium Support: ${money(it.support)}` : `Premium Support: —`
-        ].join('; ');
+    baseARR,
+    platformFeeApplied,
+    platformWaived,
+    support,
+    msrp,
 
-        lines.push(
-          `${it.productName} | ${it.qty.toLocaleString()} ${it.qtyLabel} | ${money(it.msrp)} | ${money(it.partnerNewPrice)} | ${money(it.partnerRenPrice)} | ${notes}`
-        );
-      }
+    partnerNew: msrp * (1 - STATE.partnerNewMargin/100),
+    partnerRen: msrp * (1 - STATE.partnerRenMargin/100),
+  };
+}
 
-      lines.push(``);
-      lines.push(`TOTALS`);
-      lines.push(`Metric | Amount`);
-      lines.push(`---|---:`);
-      lines.push(`Base ARR (graduated) | ${money(m.totals.baseARR)}`);
-      lines.push(`Platform Fees | ${money(m.totals.platform)}`);
-      lines.push(`Premium Support | ${money(m.totals.support)}`);
-      lines.push(`Total ARR (MSRP) | ${money(m.totals.msrp)}`);
-      lines.push(`Partner Total (Net New) | ${money(m.totals.partnerNew)}`);
-      lines.push(`Partner Total (Renewal) | ${money(m.totals.partnerRen)}`);
-      lines.push(``);
-      lines.push(`Notes: Estimate only. Not a formal quote. MSRP includes platform fee (if not waived) and premium support (if selected) per line item.`);
-      return lines.join('\n');
-    }
+function model(){
+  const items = STATE.items.map(computeItem);
+  const totals = items.reduce((a,it)=>({
+    msrp: a.msrp + it.msrp,
+    new: a.new + it.partnerNew,
+    ren: a.ren + it.partnerRen
+  }), { msrp:0, new:0, ren:0 });
+  return { items, totals };
+}
 
-    async function copyToClipboard(text){
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch {
-        try {
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-          return true;
-        } catch {
-          return false;
-        }
-      }
-    }
+/* =======================
+   COPY QUOTE (professional paste-ready)
+======================= */
+function buildQuoteText(m){
+  const stamp = new Date().toLocaleString(undefined, { year:'numeric', month:'short', day:'2-digit' });
+  const tierLabel =
+    (STATE.partnerNewMargin===25 && STATE.partnerRenMargin===15) ? 'Tier 1 (25% New / 15% Ren)' :
+    (STATE.partnerNewMargin===15 && STATE.partnerRenMargin===15) ? 'Tier 2 (15% New / 15% Ren)' :
+    (STATE.partnerNewMargin===5 && STATE.partnerRenMargin===5) ? 'Tier 3 (5% New / 5% Ren)' :
+    `Custom (${STATE.partnerNewMargin}% New / ${STATE.partnerRenMargin}% Ren)`;
 
-    /* =======================
-       RENDER
-    ======================= */
-    function render(){
-      const m = model();
-      const root = document.getElementById('app');
+  const lines = [];
+  lines.push(`RECAST PRICING ESTIMATE (Partner)`);
+  lines.push(`Generated: ${stamp}`);
+  lines.push(`Partner Tier: ${tierLabel}`);
+  lines.push(``);
+  lines.push(`LINE ITEMS`);
+  lines.push(`Product | Qty | MSRP (ARR) | Partner (New) | Partner (Ren) | Notes`);
+  lines.push(`---|---:|---:|---:|---:|---`);
 
-      root.innerHTML = `
-        ${topbar(m)}
-        <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 pb-16">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <section class="lg:col-span-8 space-y-6">
-              ${tabs()}
-              ${STATE.activeTab === 'pricing' ? pricingPanel(m) : slaPanel()}
-            </section>
+  for(const it of m.items){
+    const notes = it.userMode
+      ? `Pricing: per user (min 250); Platform: waived; Premium Support: —`
+      : `Pricing: per endpoint; Platform: ${it.platformWaived ? 'waived' : money(it.platformFeeApplied)}; Premium Support: ${it.addSupport ? 'included' : '—'}`;
 
-            <aside class="lg:col-span-4">
-              ${summaryPanel(m)}
-            </aside>
+    lines.push(
+      `${it.productName} | ${it.qty.toLocaleString()} ${it.qtyLabel} | ${money(it.msrp)} | ${money(it.partnerNew)} | ${money(it.partnerRen)} | ${notes}`
+    );
+  }
+
+  lines.push(``);
+  lines.push(`TOTALS`);
+  lines.push(`Metric | Amount`);
+  lines.push(`---|---:`);
+  lines.push(`Total ARR (MSRP) | ${money(m.totals.msrp)}`);
+  lines.push(`Partner Total (Net New) | ${money(m.totals.new)}`);
+  lines.push(`Partner Total (Renewal) | ${money(m.totals.ren)}`);
+  lines.push(``);
+  lines.push(`Notes: Estimate only. Not a formal quote. MSRP includes platform fee (if not waived) and premium support (if selected) per line item.`);
+  return lines.join('\n');
+}
+
+async function copyToClipboard(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try {
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch { return false; }
+  }
+}
+
+/* =======================
+   RENDER
+======================= */
+function render(){
+  const m = model();
+  const root = document.getElementById('app');
+
+  root.innerHTML = `
+    ${header()}
+    <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <section class="lg:col-span-8 space-y-6">
+
+        <!-- Partner Tier ABOVE line items (as requested) -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
+          <h3 class="font-semibold">Partner Tier</h3>
+          <p class="text-sm text-slate-600 mt-1">Quick presets (deal registration approval required for Tier 1 / Tier 2).</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            ${tierBtn('25% Tier 1',25,15)}
+            ${tierBtn('15% Tier 2',15,15)}
+            ${tierBtn('5% Tier 3',5,5)}
           </div>
-        </main>
-
-        ${addProductModal()}
-        ${toast()}
-      `;
-
-      if (window.lucide?.createIcons) { try { window.lucide.createIcons(); } catch {} }
-    }
-
-    function topbar(m){
-      return `
-        <header class="sticky top-0 z-30 backdrop-blur bg-white/80 border-b border-slate-200">
-          <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 py-4 flex items-center justify-between gap-4">
-            <div class="min-w-0">
-              <h1 class="text-lg sm:text-xl font-semibold tracking-tight truncate">Recast Partner Pricing (Estimator Only)</h1>
-              <p class="text-sm text-slate-600 mt-0.5">Add items, review totals, then copy a paste-ready quote.</p>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <button type="button"
-                class="hidden sm:inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 shadow-soft"
-                data-action="open-modal">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                Add Product
-              </button>
-
-              <button type="button"
-                class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-soft"
-                data-action="copy-quote">
-                <i data-lucide="clipboard-copy" class="w-4 h-4"></i>
-                Copy Quote
-              </button>
-            </div>
-          </div>
-        </header>
-      `;
-    }
-
-    function tabs(){
-      const tabBtn = (id, label, icon) => `
-        <button type="button"
-          class="${cx(
-            'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition shadow-soft',
-            STATE.activeTab===id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-          )}"
-          data-action="set-tab" data-tab="${id}">
-          <i data-lucide="${icon}" class="w-4 h-4"></i>${label}
-        </button>
-      `;
-
-      return `
-        <div class="flex flex-wrap gap-2">
-          ${tabBtn('pricing','Pricing','shopping-cart')}
-          ${tabBtn('sla','Support SLA','life-buoy')}
-          <div class="flex-1"></div>
-          <button type="button"
-            class="sm:hidden inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 shadow-soft"
-            data-action="open-modal">
-            <i data-lucide="plus" class="w-4 h-4"></i>Add Product
-          </button>
         </div>
-      `;
-    }
 
-    function pricingPanel(m){
-      return `
+        <!-- Line Items -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-soft overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h2 class="text-base font-semibold">Line Items</h2>
-              <p class="text-sm text-slate-600 mt-0.5">Edit quantities, toggle support, remove items.</p>
-            </div>
+          <div class="px-5 py-4 border-b border-slate-200 font-semibold flex items-center justify-between">
+            <span>Line Items</span>
+            <button data-action="add-item" class="text-sm font-semibold text-blue-600 hover:text-blue-700">+ Add Product</button>
           </div>
 
           <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead class="bg-slate-50 text-slate-600">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-700">
                 <tr>
                   <th class="px-5 py-3 text-left font-semibold">Product</th>
                   <th class="px-5 py-3 text-left font-semibold">Qty</th>
@@ -361,7 +281,7 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200">
-                ${m.items.map(rowItem).join('')}
+                ${m.items.map(renderRow).join('')}
               </tbody>
             </table>
           </div>
@@ -371,443 +291,281 @@
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
-          <h3 class="text-base font-semibold">Partner Tier</h3>
-          <p class="text-sm text-slate-600 mt-1">Quick presets (deal registration approval required for Tier 1 / Tier 2).</p>
-          <div class="mt-4 flex flex-wrap gap-2">
-            ${tierButton('1','25% Tier 1', 25, 15)}
-            ${tierButton('2','15% Tier 2', 15, 15)}
-            ${tierButton('3','5% Tier 3', 5, 5)}
-          </div>
-        </div>
-      `;
-    }
+      </section>
 
-    function rowItem(it){
-      const raw = STATE.items.find(x => x.id === it.id);
-      const isUserMode = it.isUserMode;
-      const supportDisabled = isUserMode;
-
-      return `
-        <tr data-item="${it.id}">
-          <td class="px-5 py-4">
-            <div class="flex flex-col gap-1">
-              <select class="w-full max-w-[420px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/30"
-                data-action="change-product">
-                ${Object.entries(PRODUCTS).map(([k,v]) =>
-                  `<option value="${k}" ${it.productKey===k?'selected':''}>${v.name}</option>`
-                ).join('')}
-              </select>
-
-              ${isAWProduct(it.productKey) ? `
-                <div class="flex items-center gap-2 text-xs text-slate-600">
-                  <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Pricing: per user (min 250)</span>
-                </div>
-              ` : `
-                <div class="flex items-center gap-2 text-xs text-slate-600">
-                  <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Pricing: per endpoint</span>
-                  ${it.platformWaived ? `<span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Platform waived</span>` : ``}
-                </div>
-              `}
-            </div>
-          </td>
-
-          <td class="px-5 py-4">
-            <div class="flex items-center gap-2">
-              <input
-                class="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm mono-tabular focus:outline-none focus:ring-2 focus:ring-blue-600/30"
-                type="text" inputmode="numeric" pattern="[0-9]*"
-                value="${raw?.qtyText ?? it.qty}"
-                data-action="edit-qty"
-                aria-label="Quantity">
-              <div class="text-xs text-slate-600">${it.qtyLabel}</div>
-            </div>
-          </td>
-
-          <td class="px-5 py-4">
-            <label class="inline-flex items-center gap-2 select-none">
-              <input type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-                data-action="toggle-support"
-                ${it.addSupport ? 'checked' : ''}
-                ${supportDisabled ? 'disabled' : ''}>
-              <span class="${supportDisabled ? 'text-slate-400' : 'text-slate-700'}">Premium</span>
-            </label>
-            ${supportDisabled ? `<div class="text-xs text-slate-400 mt-1">Not available in per-user model</div>` : ``}
-          </td>
-
-          <td class="px-5 py-4 font-semibold mono-tabular">${money(it.msrp)}</td>
-          <td class="px-5 py-4 mono-tabular">${money(it.partnerNewPrice)}</td>
-          <td class="px-5 py-4 mono-tabular">${money(it.partnerRenPrice)}</td>
-
-          <td class="px-5 py-4 text-right">
-            <button type="button"
-              class="${cx(
-                'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border shadow-soft',
-                STATE.items.length===1 ? 'text-slate-400 border-slate-200 bg-slate-50 cursor-not-allowed' : 'text-red-700 border-red-200 bg-red-50 hover:bg-red-100'
-              )}"
-              data-action="remove-item"
-              ${STATE.items.length===1 ? 'disabled' : ''}>
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-              Remove
-            </button>
-          </td>
-        </tr>
-      `;
-    }
-
-    function tierButton(id,label,newM,renM){
-      const active = STATE.partnerNewMargin===newM && STATE.partnerRenMargin===renM;
-      return `
-        <button type="button" data-action="set-tier" data-tier="${id}"
-          class="${cx(
-            'px-4 py-2 rounded-xl text-sm font-semibold border shadow-soft transition',
-            active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-          )}">
-          ${label}
-          <span class="${cx('ml-2 text-xs', active ? 'text-white/80' : 'text-slate-500')}">(${newM}% / ${renM}%)</span>
-        </button>
-      `;
-    }
-
-    function summaryPanel(m){
-      return `
-        <div class="sticky top-[88px] space-y-4">
-          <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h3 class="text-base font-semibold">Cart Summary</h3>
-                <p class="text-sm text-slate-600 mt-1">${m.items.length} item(s) • ${m.totals.qty.toLocaleString()} total qty</p>
-              </div>
-              <div class="inline-flex items-center rounded-xl bg-slate-900 text-white px-3 py-2 text-xs font-semibold">
-                ARR
-              </div>
-            </div>
-
-            <div class="mt-5 space-y-3 text-sm">
-              ${metricRow('Total ARR (MSRP)', money(m.totals.msrp), true)}
-              ${metricRow('Partner Total (Net New)', money(m.totals.partnerNew), true)}
-              ${metricRow('Partner Total (Renewal)', money(m.totals.partnerRen), true)}
-              <div class="h-px bg-slate-200 my-2"></div>
-              ${metricRow('Base ARR (graduated)', money(m.totals.baseARR))}
-              ${metricRow('Platform Fees', money(m.totals.platform))}
-              ${metricRow('Premium Support', money(m.totals.support))}
-            </div>
-
-            <div class="mt-5 flex gap-2">
-              <button type="button"
-                class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-soft"
-                data-action="copy-quote">
-                <i data-lucide="clipboard-copy" class="w-4 h-4"></i>Copy Quote
-              </button>
-              <button type="button"
-                class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 shadow-soft"
-                data-action="open-modal">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
-            <h4 class="text-sm font-semibold">What gets copied</h4>
-            <p class="text-sm text-slate-600 mt-1">
-              A paste-ready quote block with line items, totals, and your selected partner tier.
-              Works well in Google Docs / Word / email drafts without formatting chaos.
-            </p>
-          </div>
-        </div>
-      `;
-    }
-
-    function metricRow(label, value, emphasis=false){
-      return `
-        <div class="flex items-center justify-between gap-3">
-          <div class="${cx('text-slate-600', emphasis && 'font-semibold text-slate-900')}">${label}</div>
-          <div class="${cx('mono-tabular', emphasis ? 'font-semibold text-slate-900' : 'text-slate-900')}">${value}</div>
-        </div>
-      `;
-    }
-
-    function slaPanel(){
-      return `
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-200">
-            <h2 class="text-base font-semibold">Support SLA</h2>
-            <p class="text-sm text-slate-600 mt-1">Response time targets (not time-to-resolution guarantees).</p>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead class="bg-slate-50 text-slate-600">
-                <tr>
-                  <th class="px-5 py-3 text-left font-semibold">Support Level</th>
-                  <th class="px-5 py-3 text-left font-semibold">Basic</th>
-                  <th class="px-5 py-3 text-left font-semibold">Premium</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-200">
-                <tr><td class="px-5 py-3 font-semibold">Urgent Severity</td><td class="px-5 py-3">First response: <strong>1 Business Day</strong></td><td class="px-5 py-3">First & update: <strong>2 Business Hours</strong></td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Normal Severity</td><td class="px-5 py-3">First response: <strong>2 Business Days</strong></td><td class="px-5 py-3">First & update: <strong>4 Business Hours</strong></td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Low Severity</td><td class="px-5 py-3">First response: <strong>3 Business Days</strong></td><td class="px-5 py-3">First & update: <strong>8 Business Hours</strong></td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Availability</td><td class="px-5 py-3" colspan="2">8am – 5pm CT/CET</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Support Hours</td><td class="px-5 py-3" colspan="2">Unlimited</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Dedicated CSM</td><td class="px-5 py-3">✔</td><td class="px-5 py-3">✔</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Support Call Scheduling</td><td class="px-5 py-3">Based on availability</td><td class="px-5 py-3">Urgent within 2 business days; Normal within 4; Low based on availability</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Environment Audit</td><td class="px-5 py-3">—</td><td class="px-5 py-3">1× / year</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Configuration Audit</td><td class="px-5 py-3">—</td><td class="px-5 py-3">1× / year</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Upgrade Assistance</td><td class="px-5 py-3">—</td><td class="px-5 py-3">2× / year</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">User Group Membership</td><td class="px-5 py-3">Based on availability</td><td class="px-5 py-3">Priority recruitment</td></tr>
-                <tr><td class="px-5 py-3 font-semibold">Pricing</td><td class="px-5 py-3">Included with Enterprise License</td><td class="px-5 py-3">+20% of total ARR (minimum $6,000)</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
-    }
-
-    function addProductModal(){
-      if(!STATE.modalOpen) return '';
-
-      const cards = Object.entries(PRODUCTS).map(([k,v]) => `
-        <button type="button"
-          class="text-left rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 p-4 shadow-soft transition"
-          data-action="modal-add" data-product="${k}">
+      <!-- Summary -->
+      <aside class="lg:col-span-4">
+        <div class="sticky top-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <div class="font-semibold">${v.name}</div>
-              <div class="text-sm text-slate-600 mt-1">
-                Platform fee: ${money(v.platformFee)} • Minimum: ${money(v.minTotal)}
-              </div>
+              <h3 class="font-semibold">Cart Summary</h3>
+              <p class="text-sm text-slate-600 mt-1">${m.items.length} item(s)</p>
             </div>
-            <i data-lucide="plus-circle" class="w-5 h-5 text-blue-600"></i>
+            <button data-action="copy-quote" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-soft text-sm font-semibold">
+              <i data-lucide="clipboard-copy" class="w-4 h-4"></i> Copy Quote
+            </button>
           </div>
+
+          <div class="mt-5 space-y-2 text-sm mono">
+            <div class="flex justify-between"><span class="text-slate-600">Total MSRP</span><span class="font-semibold">${money(m.totals.msrp)}</span></div>
+            <div class="flex justify-between"><span class="text-slate-600">Partner Net New</span><span class="font-semibold">${money(m.totals.new)}</span></div>
+            <div class="flex justify-between"><span class="text-slate-600">Partner Renewal</span><span class="font-semibold">${money(m.totals.ren)}</span></div>
+          </div>
+
+          <div class="mt-4 text-sm text-slate-600">
+            Copy produces a paste-ready quote block suitable for docs/Word/email drafts.
+          </div>
+        </div>
+      </aside>
+
+    </main>
+
+    ${toast()}
+  `;
+
+  if (window.lucide?.createIcons) { try { window.lucide.createIcons(); } catch {} }
+}
+
+function header(){
+  return `
+    <header class="sticky top-0 bg-white/90 backdrop-blur border-b border-slate-200 shadow-soft z-20">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <h1 class="text-xl font-semibold truncate">Recast Pricing CPQ (Partner Estimator)</h1>
+          <p class="text-sm text-slate-600">Add items, review totals, then copy a professional quote.</p>
+        </div>
+        <button data-action="copy-quote" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-soft text-sm font-semibold">
+          <i data-lucide="clipboard-copy" class="w-4 h-4"></i> Copy Quote
         </button>
-      `).join('');
+      </div>
+    </header>
+  `;
+}
 
-      return `
-        <div class="fixed inset-0 z-50">
-          <div class="absolute inset-0 bg-slate-900/40" data-action="close-modal"></div>
-          <div class="absolute inset-x-0 top-10 sm:top-16 mx-auto w-[min(920px,92vw)]">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-softer overflow-hidden">
-              <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-base font-semibold">Add a product</h3>
-                  <p class="text-sm text-slate-600 mt-1">Adds a new line item with a default quantity.</p>
-                </div>
-                <button type="button" class="rounded-xl px-3 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 shadow-soft"
-                  data-action="close-modal">
-                  Close
-                </button>
-              </div>
+function tierBtn(label,newM,renM){
+  const active = STATE.partnerNewMargin===newM && STATE.partnerRenMargin===renM;
+  return `
+    <button data-action="set-tier" data-new="${newM}" data-ren="${renM}"
+      class="${cx(
+        'px-4 py-2 rounded-xl shadow-soft border text-sm font-semibold transition',
+        active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 hover:bg-slate-50'
+      )}">
+      ${label}
+      <span class="${cx('ml-2 text-xs', active ? 'text-white/80' : 'text-slate-500')}">(${newM}% / ${renM}%)</span>
+    </button>
+  `;
+}
 
-              <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                ${cards}
-              </div>
+function renderRow(it){
+  // IMPORTANT: options must be join('') to avoid commas/text nodes breaking selection in some browsers.
+  const options = Object.entries(PRODUCTS).map(([k,v]) =>
+    `<option value="${k}" ${it.productKey===k?'selected':''}>${v.name}</option>`
+  ).join('');
 
-              <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
-                Tip: Use “Copy Quote” from the summary panel once totals look right.
-              </div>
-            </div>
-          </div>
+  const supportDisabled = it.userMode;
+  const supportLabel = supportDisabled ? '—' : (it.addSupport ? 'Premium' : '—');
+
+  return `
+    <tr data-item="${it.id}">
+      <td class="px-5 py-4">
+        <select data-action="change-product"
+          class="w-full max-w-[520px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/30">
+          ${options}
+        </select>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">
+            ${it.userMode ? 'Pricing: per user (min 250)' : 'Pricing: per endpoint'}
+          </span>
+          ${(!it.userMode && it.platformWaived) ? `<span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Platform waived</span>` : ``}
         </div>
-      `;
-    }
+      </td>
 
-    function toast(){
-      if(!STATE.toast) return '';
-      const isOk = STATE.toast.type === 'success';
-      return `
-        <div class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60]">
-          <div class="${cx(
-            'rounded-2xl px-4 py-3 text-sm font-semibold shadow-softer border backdrop-blur',
-            isOk ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200' : 'bg-red-50/90 text-red-800 border-red-200'
-          )}">
-            ${STATE.toast.message}
-          </div>
+      <td class="px-5 py-4">
+        <div class="flex items-center gap-2">
+          <input data-action="edit-qty" value="${it.qty}"
+            class="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-right mono focus:outline-none focus:ring-2 focus:ring-blue-600/30"
+            inputmode="numeric" pattern="[0-9]*" />
+          <div class="text-xs text-slate-600">${it.qtyLabel}</div>
         </div>
-      `;
+      </td>
+
+      <td class="px-5 py-4">
+        <label class="inline-flex items-center gap-2 select-none">
+          <input type="checkbox" data-action="toggle-support"
+            class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+            ${it.addSupport ? 'checked' : ''}
+            ${supportDisabled ? 'disabled' : ''}>
+          <span class="${supportDisabled ? 'text-slate-400' : 'text-slate-700'}">${supportLabel}</span>
+        </label>
+        ${supportDisabled ? `<div class="text-xs text-slate-400 mt-1">Premium support not available in AW per-user model</div>` : ``}
+      </td>
+
+      <td class="px-5 py-4 font-semibold mono">${money(it.msrp)}</td>
+      <td class="px-5 py-4 mono">${money(it.partnerNew)}</td>
+      <td class="px-5 py-4 mono">${money(it.partnerRen)}</td>
+
+      <td class="px-5 py-4 text-right">
+        <button data-action="remove-item"
+          class="${cx(
+            'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border shadow-soft',
+            STATE.items.length===1 ? 'text-slate-400 border-slate-200 bg-slate-50 cursor-not-allowed' : 'text-red-700 border-red-200 bg-red-50 hover:bg-red-100'
+          )}"
+          ${STATE.items.length===1 ? 'disabled' : ''}>
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          Remove
+        </button>
+      </td>
+    </tr>
+  `;
+}
+
+function toast(){
+  if(!STATE.toast) return '';
+  const ok = STATE.toast.type === 'success';
+  return `
+    <div class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60]">
+      <div class="${cx(
+        'rounded-2xl px-4 py-3 text-sm font-semibold shadow-softer border backdrop-blur',
+        ok ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200' : 'bg-red-50/90 text-red-800 border-red-200'
+      )}">
+        ${STATE.toast.message}
+      </div>
+    </div>
+  `;
+}
+
+/* =======================
+   EVENTS (delegated)
+======================= */
+function findRow(el){
+  const tr = el.closest('[data-item]');
+  if(!tr) return null;
+  const id = tr.getAttribute('data-item');
+  const item = STATE.items.find(x => x.id === id);
+  return { id, item };
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  const action = btn.getAttribute('data-action');
+
+  if(action === 'add-item'){
+    STATE.items.push({ id: randomId(), productKey: 'rct', qtyText: '1000', addSupport: false, pricingModel: 'endpoint' });
+    render();
+    setToast('success','Added product.');
+    return;
+  }
+
+  if(action === 'remove-item'){
+    if(STATE.items.length <= 1) return;
+    const row = findRow(btn);
+    if(!row?.item) return;
+    STATE.items = STATE.items.filter(x => x.id !== row.id);
+    render();
+    setToast('success','Removed item.');
+    return;
+  }
+
+  if(action === 'set-tier'){
+    STATE.partnerNewMargin = +btn.getAttribute('data-new');
+    STATE.partnerRenMargin = +btn.getAttribute('data-ren');
+    render();
+    setToast('success','Partner tier updated.');
+    return;
+  }
+
+  if(action === 'copy-quote'){
+    const m = model();
+    const text = buildQuoteText(m);
+    const ok = await copyToClipboard(text);
+    if(ok) setToast('success','Quote copied to clipboard.');
+    else setToast('error','Copy failed (browser blocked clipboard).');
+    return;
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  const action = el.getAttribute('data-action');
+  if(!action) return;
+
+  const row = findRow(el);
+  if(!row?.item) return;
+
+  if(action === 'change-product'){
+    row.item.productKey = el.value;
+    // enforce AW model rules
+    if(isAW(row.item.productKey)){
+      row.item.pricingModel = 'user';
+      row.item.addSupport = false;
+      if(int(row.item.qtyText) < 250) row.item.qtyText = '250';
+    } else {
+      row.item.pricingModel = 'endpoint';
     }
+    render();
+    return;
+  }
 
-    /* =======================
-       EVENTS (single delegated listener)
-    ======================= */
-    function findItemRow(el){
-      const tr = el.closest('[data-item]');
-      if(!tr) return null;
-      const id = tr.getAttribute('data-item');
-      const item = STATE.items.find(x => x.id === id);
-      return { id, item };
+  if(action === 'toggle-support'){
+    if(isAW(row.item.productKey)){
+      row.item.addSupport = false;
+    } else {
+      row.item.addSupport = !!el.checked;
     }
+    render();
+    return;
+  }
+});
 
-    function normalizeQty(item){
-      const key = item.productKey;
-      const isUser = isAWProduct(key); // in this UX, AW is always per-user
-      let q = int(item.qtyText);
-      if(isUser) q = Math.max(250, q);
-      item.qtyText = String(q);
-      item.pricingModel = isUser ? 'user' : 'endpoint';
-      if(isUser) item.addSupport = false;
-    }
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  const action = el.getAttribute('data-action');
+  if(action !== 'edit-qty') return;
 
-    document.addEventListener('click', async (e) => {
-      const a = e.target.closest('[data-action]');
-      if(!a) return;
+  const row = findRow(el);
+  if(!row?.item) return;
 
-      const action = a.getAttribute('data-action');
+  row.item.qtyText = digitsOnly(el.value);
 
-      if(action === 'set-tab'){
-        STATE.activeTab = a.getAttribute('data-tab') || 'pricing';
-        render();
-        return;
-      }
+  // re-render totals while keeping typing stable
+  const caret = row.item.qtyText.length;
+  render();
+  const next = document.querySelector(`[data-item="${row.id}"] [data-action="edit-qty"]`);
+  if(next){
+    next.focus();
+    try { next.setSelectionRange(caret, caret); } catch {}
+  }
+});
 
-      if(action === 'open-modal'){
-        STATE.modalOpen = true;
-        render();
-        return;
-      }
+document.addEventListener('blur', (e) => {
+  const el = e.target;
+  const action = el.getAttribute('data-action');
+  if(action !== 'edit-qty') return;
 
-      if(action === 'close-modal'){
-        STATE.modalOpen = false;
-        render();
-        return;
-      }
+  const row = findRow(el);
+  if(!row?.item) return;
 
-      if(action === 'modal-add'){
-        const key = a.getAttribute('data-product') || 'rct';
-        const isUser = isAWProduct(key);
-        const item = {
-          id: cryptoRandomId(),
-          productKey: key,
-          qtyText: isUser ? '250' : '1000',
-          addSupport: false,
-          pricingModel: isUser ? 'user' : 'endpoint'
-        };
-        STATE.items.push(item);
-        STATE.modalOpen = false;
-        render();
-        setToast('success', 'Added to cart.');
-        return;
-      }
+  // normalize on blur (incl AW min 250)
+  let q = int(row.item.qtyText);
+  if(isAW(row.item.productKey)) q = Math.max(250, q);
+  row.item.qtyText = String(q);
+  render();
+}, true);
 
-      if(action === 'remove-item'){
-        if(STATE.items.length <= 1) return;
-        const row = findItemRow(a);
-        if(!row?.item) return;
-        STATE.items = STATE.items.filter(x => x.id !== row.id);
-        render();
-        setToast('success', 'Removed item.');
-        return;
-      }
-
-      if(action === 'set-tier'){
-        const tier = a.getAttribute('data-tier');
-        if (tier === '1') { STATE.partnerNewMargin = 25; STATE.partnerRenMargin = 15; }
-        else if (tier === '2') { STATE.partnerNewMargin = 15; STATE.partnerRenMargin = 15; }
-        else if (tier === '3') { STATE.partnerNewMargin = 5; STATE.partnerRenMargin = 5; }
-        render();
-        setToast('success', 'Partner tier updated.');
-        return;
-      }
-
-      if(action === 'copy-quote'){
-        const m = model();
-        const text = buildQuoteText(m);
-        const ok = await copyToClipboard(text);
-        if(ok) setToast('success', 'Quote copied to clipboard.');
-        else setToast('error', 'Copy failed. Your browser blocked clipboard access.');
-        return;
-      }
-    });
-
-    document.addEventListener('change', (e) => {
-      const el = e.target;
-      const row = findItemRow(el);
-      const actionEl = el.closest('[data-action]');
-      const action = actionEl?.getAttribute('data-action');
-
-      if(!action) return;
-
-      if(action === 'change-product'){
-        if(!row?.item) return;
-        row.item.productKey = el.value;
-
-        // In this version AW is always per-user to match your current UX rules.
-        if(isAWProduct(row.item.productKey)){
-          row.item.pricingModel = 'user';
-          row.item.addSupport = false;
-          if(int(row.item.qtyText) < 250) row.item.qtyText = '250';
-        } else {
-          row.item.pricingModel = 'endpoint';
-        }
-
-        render();
-        return;
-      }
-
-      if(action === 'toggle-support'){
-        if(!row?.item) return;
-        if(isAWProduct(row.item.productKey)) {
-          row.item.addSupport = false;
-        } else {
-          row.item.addSupport = !!el.checked;
-        }
-        render();
-        return;
-      }
-    });
-
-    document.addEventListener('input', (e) => {
-      const el = e.target;
-      const actionEl = el.closest('[data-action]');
-      const action = actionEl?.getAttribute('data-action');
-      if(action !== 'edit-qty') return;
-
-      const row = findItemRow(el);
-      if(!row?.item) return;
-
-      row.item.qtyText = digitsOnly(el.value);
-
-      // Don’t hard-normalize on every keystroke; keep typing smooth.
-      // We still re-render to update totals, but quantity field stays controlled by the DOM value.
-      render();
-
-      // Restore focus & caret position (small, predictable)
-      const next = document.querySelector(`[data-item="${row.id}"] [data-action="edit-qty"]`);
-      if(next){
-        const caret = row.item.qtyText.length;
-        next.focus();
-        try { next.setSelectionRange(caret, caret); } catch {}
-      }
-    });
-
-    document.addEventListener('blur', (e) => {
-      const el = e.target;
-      const actionEl = el.closest('[data-action]');
-      const action = actionEl?.getAttribute('data-action');
-      if(action !== 'edit-qty') return;
-
-      const row = findItemRow(el);
-      if(!row?.item) return;
-
-      normalizeQty(row.item);
-      render();
-    }, true);
-
-    /* =======================
-       INIT
-    ======================= */
-    document.addEventListener('DOMContentLoaded', () => {
-      // normalize initial
-      STATE.items.forEach(normalizeQty);
-      render();
-      if(!window.tailwind){
-        const b=document.createElement('div');
-        b.role='alert';
-        b.className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 mt-3';
-        b.innerHTML='<div class="rounded-2xl bg-amber-500/10 border border-amber-400/30 text-amber-900 px-4 py-3 text-sm">Styles failed to load. The estimator still works, but appearance may differ.</div>';
-        document.body.prepend(b);
-      }
-    });
-  </script>
+/* =======================
+   INIT
+======================= */
+document.addEventListener('DOMContentLoaded', () => {
+  render();
+  if(!window.tailwind){
+    const b=document.createElement('div');
+    b.role='alert';
+    b.className='max-w-7xl mx-auto px-6 mt-3';
+    b.innerHTML='<div class="rounded-2xl bg-amber-500/10 border border-amber-400/30 text-amber-900 px-4 py-3 text-sm">Styles failed to load. The estimator still works, but appearance may differ.</div>';
+    document.body.prepend(b);
+  }
+});
+</script>
 </body>
 </html>
