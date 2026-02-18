@@ -196,7 +196,7 @@ function buildQuoteText(m){
   lines.push(`Partner Tier: ${tierLabel}`);
   lines.push(``);
   lines.push(`LINE ITEMS`);
-  lines.push(`Product | Qty | MSRP (ARR) | Partner (New) | Partner (Ren) | Notes`);
+  lines.push(`Product | Qty | MSRP (ARR) | Partner (New) | Renewal | Notes`);
   lines.push(`---|---:|---:|---:|---:|---`);
 
   for(const it of m.items){
@@ -274,9 +274,9 @@ function render(){
                   <th class="px-5 py-3 text-left font-semibold">Product</th>
                   <th class="px-5 py-3 text-left font-semibold">Qty</th>
                   <th class="px-5 py-3 text-left font-semibold">Support</th>
-                  <th class="px-5 py-3 text-left font-semibold">MSRP (ARR)</th>
-                  <th class="px-5 py-3 text-left font-semibold">Partner (New)</th>
-                  <th class="px-5 py-3 text-left font-semibold">Partner (Ren)</th>
+                  <th class="px-5 py-3 text-left font-semibold">MSRP</th>
+                  <th class="px-5 py-3 text-left font-semibold">Partner $</th>
+                  <th class="px-5 py-3 text-left font-semibold">Renewal $</th>
                   <th class="px-5 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
