@@ -1,17 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Recast Pricing CPQ — Partner Estimator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    :root { color-scheme: light; }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
     .shadow-soft { box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06); }
     .shadow-softer { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 14px 40px rgba(0,0,0,.08); }
     .mono { font-variant-numeric: tabular-nums; }
+    .fade-in { animation: fadeIn .18s ease-out both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 
@@ -23,24 +27,29 @@
    STATE
 ======================= */
 const STATE = {
-  items: [
-    { id: randomId(), productKey: 'rct', qtyText: '1000', addSupport: false, pricingModel: 'endpoint' }
-  ],
-  partnerNewMargin: 25,
-  partnerRenMargin: 15,
-  toast: null
+  tier: null,                 // { id, label, newMargin, renMargin }
+  tierLocked: false,
+  items: [],                  // { id, productKey, qtyText, addSupport }
+  quoteMode: false,
+  quoteView: 'new',           // 'new' | 'ren' | 'msrp'
+  drawerOpen: false,          // mobile summary drawer
+  modal: null,                // { type: 'config', draft: { productKey, qtyText, addSupport }, editId? }
+  confirmTier: null,          // { nextTier }
+  toast: null,
 };
 
 /* =======================
-   DATA (restored from your original)
+   DATA
 ======================= */
+// NOTE: Fixed an obvious anomaly: the final Infinity tier previously jumped back up to 0.10.
+// Also, we allow the published 0.05 tier by flooring at 0.05 (not 0.10).
 const TIERS_BASE5 = [
   { max: 1000, rate: 5.00 }, { max: 2000, rate: 4.50 }, { max: 3000, rate: 4.25 }, { max: 4000, rate: 4.00 }, { max: 5000, rate: 3.75 },
   { max: 6000, rate: 3.50 }, { max: 7000, rate: 3.25 }, { max: 8000, rate: 3.00 }, { max: 9000, rate: 2.75 }, { max: 10000, rate: 2.50 },
   { max: 15000, rate: 2.25 }, { max: 20000, rate: 2.00 }, { max: 25000, rate: 1.75 }, { max: 30000, rate: 1.50 }, { max: 40000, rate: 1.25 },
   { max: 50000, rate: 1.00 }, { max: 60000, rate: 0.75 }, { max: 70000, rate: 0.50 }, { max: 80000, rate: 0.40 }, { max: 90000, rate: 0.35 },
   { max: 100000, rate: 0.30 }, { max: 120000, rate: 0.25 }, { max: 140000, rate: 0.20 }, { max: 160000, rate: 0.15 }, { max: 180000, rate: 0.10 },
-  { max: 200000, rate: 0.05 }, { max: Infinity, rate: 0.10 }
+  { max: 200000, rate: 0.05 }, { max: Infinity, rate: 0.05 }
 ];
 
 const USER_TIERS_MONTHLY = [
@@ -53,25 +62,43 @@ const USER_TIERS_MONTHLY = [
 ];
 
 const PRODUCTS = {
-  rct:      { name: 'Right Click Tools (Core)', baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
-  patch:    { name: 'Patching',                 baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
-  insights: { name: 'Insights',                 baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
-  priv:     { name: 'Privilege Manager',        baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
-  aw_cloud: { name: 'Application Workspace — Direct Cloud',  baseFactor: 11/5, platformFee: 15000, minTotal: 26000 },
+  rct:      { name: 'Right Click Tools (RCT)', baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
+  patch:    { name: 'RCT -Patching',                 baseFactor: 1,     platformFee: 7500,  minTotal: 12500 },
+  insights: { name: 'RCT - Insights',                 baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
+  priv:     { name: 'RCT - Privilege Manager',        baseFactor: 1,     platformFee: 0,     minTotal: 5000  },
+  aw_cloud: { name: 'Application Workspace',  baseFactor: 11/5, platformFee: 15000, minTotal: 26000 },
   aw_onprem:{ name: 'Application Workspace — Direct On-Prem', baseFactor: 10/5, platformFee: 15000, minTotal: 25000 }
 };
+
+const PRODUCT_CATALOG = [
+  { key: 'rct',       desc: 'Core endpoint management toolkit.' },
+  { key: 'patch',     desc: 'Patch compliance and remediation.' },
+  { key: 'insights',  desc: 'Reporting and operational insights.' },
+  { key: 'priv',      desc: 'Least-privilege enforcement and elevation.' },
+  { key: 'aw_cloud',  desc: 'Application Workspace delivered via cloud.' },
+];
+
+const TIERS_UI = [
+  { id: 1, label: 'Tier 1', newMargin: 25, renMargin: 15, bullets: ['You own the deal.'] },
+  { id: 2, label: 'Tier 2', newMargin: 15, renMargin: 15, bullets: ['We sell it together.'] },
+  { id: 3, label: 'Tier 3', newMargin: 5,  renMargin: 5,  bullets: ['You refer it.'] },
+];
 
 /* =======================
    UTILS
 ======================= */
 function cx(...a){ return a.filter(Boolean).join(' '); }
 function isAW(key){ return key === 'aw_cloud' || key === 'aw_onprem'; }
+// NEW: anything whose product name includes "RCT" counts as RCT family for bundle logic
+function isRCTFamily(key){
+  return String(PRODUCTS[key]?.name || '').includes('RCT');
+}
 function digitsOnly(text){ return String(text ?? '').replace(/[^\d]/g,''); }
 function int(n){
   n = Number(String(n).replace(/[^0-9\-]/g,''));
   return isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
 }
-function clampFloor(r){ return Math.max(r, 0.10); }
+function clampFloor(r){ return Math.max(r, 0.05); }
 function money(n){ return (!isFinite(n)) ? '—' : n.toLocaleString(undefined,{ style:'currency', currency:'USD' }); }
 function randomId(){
   try { return crypto.randomUUID(); } catch { return 'id-' + Math.random().toString(36).slice(2); }
@@ -81,6 +108,76 @@ function setToast(type, message){
   render();
   clearTimeout(setToast._t);
   setToast._t = setTimeout(() => { STATE.toast = null; render(); }, 1800);
+}
+function formatQty(n){
+  return (isFinite(n) ? n.toLocaleString() : '—');
+}
+function setDrawer(open){
+  STATE.drawerOpen = !!open;
+  render();
+}
+
+/* =======================
+   SHAREABLE LINK
+======================= */
+function base64UrlEncode(obj){
+  const json = JSON.stringify(obj);
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function base64UrlDecode(str){
+  const pad = str.length % 4 ? '='.repeat(4 - (str.length % 4)) : '';
+  const b64 = str.replace(/-/g,'+').replace(/_/g,'/') + pad;
+  const json = decodeURIComponent(escape(atob(b64)));
+  return JSON.parse(json);
+}
+
+function applyShareState(payload){
+  if(!payload || typeof payload !== 'object') return false;
+
+  const tier = TIERS_UI.find(t => t.id === payload.tierId) || null;
+  if(tier){
+    STATE.tier = tier;
+    STATE.tierLocked = true;
+  }
+
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  STATE.items = items
+    .filter(x => x && PRODUCTS[x.productKey])
+    .map(x => ({
+      id: randomId(),
+      productKey: x.productKey,
+      qtyText: String(int(x.qtyText ?? x.qty ?? 0) || defaultQtyFor(x.productKey)),
+      addSupport: !!x.addSupport && !isAW(x.productKey),
+    }));
+
+  STATE.quoteMode = !!payload.quoteMode;
+  if(['new','ren','msrp'].includes(payload.quoteView)) STATE.quoteView = payload.quoteView;
+
+  return true;
+}
+
+function readShareFromUrl(){
+  const hash = String(location.hash || '');
+  const m = hash.match(/#q=([A-Za-z0-9_-]+)/);
+  if(!m) return;
+  try {
+    const payload = base64UrlDecode(m[1]);
+    if(applyShareState(payload)) setToast('success','Loaded estimate from link.');
+  } catch {
+    setToast('error','Could not load estimate link.');
+  }
+}
+
+function buildShareUrl(){
+  const payload = {
+    tierId: STATE.tier?.id ?? null,
+    items: STATE.items.map(it => ({ productKey: it.productKey, qtyText: it.qtyText, addSupport: !!it.addSupport })),
+    quoteMode: STATE.quoteMode,
+    quoteView: STATE.quoteView,
+  };
+  const token = base64UrlEncode(payload);
+  return `${location.origin}${location.pathname}#q=${token}`;
 }
 
 /* =======================
@@ -108,14 +205,17 @@ function premiumSupportCost(add, basePlusPlat){
   return add ? Math.max(basePlusPlat * 0.20, 6000) : 0;
 }
 
+function defaultQtyFor(productKey){
+  return isAW(productKey) ? 250 : 1000;
+}
+
 /* =======================
    MODEL
 ======================= */
 function computeItem(item){
   const meta = PRODUCTS[item.productKey] || PRODUCTS.rct;
-
   const aw = isAW(item.productKey);
-  const userMode = aw; // in this UX, AW is always per-user (matches your original implementation)
+  const userMode = aw; // AW is per-user
 
   let units = int(item.qtyText);
 
@@ -134,8 +234,7 @@ function computeItem(item){
     platformWaived = true;
     basePlusPlatform = baseARR;
 
-    // Premium support disabled in per-user AW pricing model (as in your original code)
-    support = 0;
+    support = 0; // Premium support disabled for AW per-user
   } else {
     const endpointTiers = tiersFor(item.productKey);
     baseARR = graduatedSubtotal(units, endpointTiers);
@@ -148,6 +247,9 @@ function computeItem(item){
   }
 
   const msrp = basePlusPlatform + support;
+
+  const newMargin = STATE.tier?.newMargin ?? 0;
+  const renMargin = STATE.tier?.renMargin ?? 0;
 
   return {
     id: item.id,
@@ -164,56 +266,110 @@ function computeItem(item){
     support,
     msrp,
 
-    partnerNew: msrp * (1 - STATE.partnerNewMargin/100),
-    partnerRen: msrp * (1 - STATE.partnerRenMargin/100),
+    // These get overwritten in model() if bundle applies
+    partnerNew: msrp * (1 - newMargin/100),
+    partnerRen: msrp * (1 - renMargin/100),
   };
 }
 
+// UPDATED: apply 25% RCT bundle discount (when 2+ RCT-family line items exist) BEFORE partner margin
 function model(){
-  const items = STATE.items.map(computeItem);
-  const totals = items.reduce((a,it)=>({
-    msrp: a.msrp + it.msrp,
-    new: a.new + it.partnerNew,
-    ren: a.ren + it.partnerRen
-  }), { msrp:0, new:0, ren:0 });
-  return { items, totals };
+  const raw = STATE.items.map(computeItem);
+
+  const rctLineCount = raw.filter(it => isRCTFamily(it.productKey)).length;
+  const bundleOn = rctLineCount >= 2;
+
+  const newMargin = STATE.tier?.newMargin ?? 0;
+  const renMargin = STATE.tier?.renMargin ?? 0;
+
+  const items = raw.map(it => {
+    const bundleApplied = bundleOn && isRCTFamily(it.productKey);
+
+    // do currency math in cents
+    const msrpCents = Math.round((it.msrp + Number.EPSILON) * 100);
+
+    // 25% off => keep 75%
+    const msrpAfterBundleCents = bundleApplied
+      ? Math.round(msrpCents * 75 / 100)
+      : msrpCents;
+
+    const partnerNewCents = Math.round(msrpAfterBundleCents * (100 - newMargin) / 100);
+    const partnerRenCents = Math.round(msrpAfterBundleCents * (100 - renMargin) / 100);
+
+    return {
+      ...it,
+      bundleApplied,
+      bundleDiscountRate: bundleApplied ? 25 : 0,
+      msrpAfterBundle: msrpAfterBundleCents / 100,
+
+      partnerNew: partnerNewCents / 100,
+      partnerRen: partnerRenCents / 100,
+
+      _msrpCents: msrpCents,
+      _partnerNewCents: partnerNewCents,
+      _partnerRenCents: partnerRenCents,
+    };
+  });
+
+  const totalsCents = items.reduce((a, it) => ({
+    msrp: a.msrp + (it._msrpCents ?? 0),
+    new:  a.new  + (it._partnerNewCents ?? 0),
+    ren:  a.ren  + (it._partnerRenCents ?? 0),
+  }), { msrp: 0, new: 0, ren: 0 });
+
+  const totals = {
+    msrp: totalsCents.msrp / 100,
+    new:  totalsCents.new  / 100,
+    ren:  totalsCents.ren  / 100,
+  };
+
+  const hasPricingIssue = items.some(it => !isFinite(it.msrp) || !isFinite(it.partnerNew) || !isFinite(it.partnerRen));
+
+  return { items, totals, hasPricingIssue, bundleOn };
+}
+
+function priceForView(it, view){
+  if(view === 'msrp') return it.msrp;
+  if(view === 'ren') return it.partnerRen;
+  return it.partnerNew; // 'new'
 }
 
 /* =======================
-   COPY QUOTE (professional paste-ready)
+   QUOTE TEXT
 ======================= */
 function buildQuoteText(m){
   const stamp = new Date().toLocaleString(undefined, { year:'numeric', month:'short', day:'2-digit' });
-  const tierLabel =
-    (STATE.partnerNewMargin===25 && STATE.partnerRenMargin===15) ? 'Tier 1 (25% New / 15% Ren)' :
-    (STATE.partnerNewMargin===15 && STATE.partnerRenMargin===15) ? 'Tier 2 (15% New / 15% Ren)' :
-    (STATE.partnerNewMargin===5 && STATE.partnerRenMargin===5) ? 'Tier 3 (5% New / 5% Ren)' :
-    `Custom (${STATE.partnerNewMargin}% New / ${STATE.partnerRenMargin}% Ren)`;
+  const tierLabel = STATE.tier ? `${STATE.tier.label} (Net New / Renewal)` : 'Not selected';
+
+  const viewLabel = (STATE.quoteView === 'msrp') ? 'MSRP' : (STATE.quoteView === 'ren') ? 'Partner Renewal' : 'Partner Net New';
 
   const lines = [];
   lines.push(`RECAST PRICING ESTIMATE (Partner)`);
   lines.push(`Generated: ${stamp}`);
   lines.push(`Partner Tier: ${tierLabel}`);
+  lines.push(`View: ${viewLabel}`);
   lines.push(``);
   lines.push(`LINE ITEMS`);
-  lines.push(`Product | Qty | MSRP (ARR) | Partner (New) | Renewal | Notes`);
-  lines.push(`---|---:|---:|---:|---:|---`);
+  lines.push(`Product | Qty | Unit | Line Total | Notes`);
+  lines.push(`---|---:|---:|---:|---`);
 
   for(const it of m.items){
-    const notes = it.userMode
-      ? `Pricing: per user (min 250); Platform: waived; Premium Support: —`
-      : `Pricing: per endpoint; Platform: ${it.platformWaived ? 'waived' : money(it.platformFeeApplied)}; Premium Support: ${it.addSupport ? 'included' : '—'}`;
+    const line = priceForView(it, STATE.quoteView);
+    const unit = it.qty ? (line / it.qty) : 0;
 
-    lines.push(
-      `${it.productName} | ${it.qty.toLocaleString()} ${it.qtyLabel} | ${money(it.msrp)} | ${money(it.partnerNew)} | ${money(it.partnerRen)} | ${notes}`
-    );
+    const bundleTag = it.bundleApplied ? `; RCT bundle: -25%` : '';
+    const notes = it.userMode
+      ? `Per user (min 250); Platform waived; Premium Support: —${bundleTag}`
+      : `Per endpoint; Platform: ${it.platformWaived ? 'waived' : money(it.platformFeeApplied)}; Premium Support: ${it.addSupport ? 'included' : '—'}${bundleTag}`;
+
+    lines.push(`${it.productName} | ${it.qty.toLocaleString()} ${it.qtyLabel} | ${money(unit)} | ${money(line)} | ${notes}`);
   }
 
   lines.push(``);
   lines.push(`TOTALS`);
   lines.push(`Metric | Amount`);
   lines.push(`---|---:`);
-  lines.push(`Total ARR (MSRP) | ${money(m.totals.msrp)}`);
+  lines.push(`Subtotal (MSRP) | ${money(m.totals.msrp)}`);
   lines.push(`Partner Total (Net New) | ${money(m.totals.new)}`);
   lines.push(`Partner Total (Renewal) | ${money(m.totals.ren)}`);
   lines.push(``);
@@ -244,173 +400,597 @@ function render(){
   const root = document.getElementById('app');
 
   root.innerHTML = `
-    ${header()}
-    <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    ${header(m)}
+
+    <main class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
       <section class="lg:col-span-8 space-y-6">
-
-        <!-- Partner Tier ABOVE line items (as requested) -->
-        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
-          <h3 class="font-semibold">Partner Tier</h3>
-          <p class="text-sm text-slate-600 mt-1">Select Margin Tier (Based on Deal Registration Guidlines = Tier 1 / Tier 2 / Tier 3).</p>
-          <div class="mt-4 flex flex-wrap gap-2">
-            ${tierBtn('25% Tier 1',25,15)}
-            ${tierBtn('15% Tier 2',15,15)}
-            ${tierBtn('5% Tier 3',5,5)}
-          </div>
-        </div>
-
-        <!-- Line Items -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-200 font-semibold flex items-center justify-between">
-            <span>Line Items</span>
-            <button data-action="add-item" class="text-sm font-semibold text-blue-600 hover:text-blue-700">+ Add Product</button>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-50 text-slate-700">
-                <tr>
-                  <th class="px-5 py-3 text-left font-semibold">Product</th>
-                  <th class="px-5 py-3 text-left font-semibold">Qty</th>
-                  <th class="px-5 py-3 text-left font-semibold">Support</th>
-                  <th class="px-5 py-3 text-left font-semibold">MSRP</th>
-                  <th class="px-5 py-3 text-left font-semibold">Partner $</th>
-                  <th class="px-5 py-3 text-left font-semibold">Renewal $</th>
-                  <th class="px-5 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-200">
-                ${m.items.map(renderRow).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
-          </div>
-        </div>
-
+        ${STATE.quoteMode ? quoteModeMain(m) : configModeMain(m)}
       </section>
 
-      <!-- Summary -->
       <aside class="lg:col-span-4">
-        <div class="sticky top-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h3 class="font-semibold">Cart Summary</h3>
-              <p class="text-sm text-slate-600 mt-1">${m.items.length} item(s)</p>
-            </div>
-            </button>
-          </div>
-
-          <div class="mt-5 space-y-2 text-sm mono">
-            <div class="flex justify-between"><span class="text-slate-600">Total MSRP</span><span class="font-semibold">${money(m.totals.msrp)}</span></div>
-            <div class="flex justify-between"><span class="text-slate-600">Partner Net New</span><span class="font-semibold">${money(m.totals.new)}</span></div>
-            <div class="flex justify-between"><span class="text-slate-600">Partner Renewal</span><span class="font-semibold">${money(m.totals.ren)}</span></div>
-          </div>
-
-          <div class="mt-4 text-sm text-slate-600">
-          </div>
-        </div>
+        ${desktopSummary(m)}
       </aside>
+
+      ${mobileDrawer(m)}
 
     </main>
 
+    ${modal()}
+    ${confirmTierModal()}
     ${toast()}
   `;
 
   if (window.lucide?.createIcons) { try { window.lucide.createIcons(); } catch {} }
 }
 
-function header(){
+function header(m){
+  const rightBtns = STATE.quoteMode
+    ? `
+      <div class="flex items-center gap-2">
+        <button data-action="copy-quote" class="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl shadow-soft text-sm font-semibold">
+          <i data-lucide="clipboard-copy" class="w-4 h-4"></i> Copy Quote
+        </button>
+      </div>
+    `
+    : `
+    `;
+
   return `
     <header class="sticky top-0 bg-white/90 backdrop-blur border-b border-slate-200 shadow-soft z-20">
       <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
         <div class="min-w-0">
-          <h1 class="text-xl font-semibold truncate">Recast Partner Pricing(Estimator)</h1>
+          <h1 class="text-xl font-semibold truncate">Recast Partner Pricing Estimator</h1>
+          <p class="text-sm text-slate-600 mt-0.5">Estimate Only - Official Tier Approval Needed for Executable</p>
         </div>
-        <button data-action="copy-quote" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-soft text-sm font-semibold">
-          <i data-lucide="clipboard-copy" class="w-4 h-4"></i> Copy Quote
-        </button>
+        ${rightBtns}
       </div>
     </header>
   `;
 }
 
-function tierBtn(label,newM,renM){
-  const active = STATE.partnerNewMargin===newM && STATE.partnerRenMargin===renM;
+/* -----------------------
+   CONFIG MODE
+----------------------- */
+function configModeMain(m){
   return `
-    <button data-action="set-tier" data-new="${newM}" data-ren="${renM}"
-      class="${cx(
-        'px-4 py-2 rounded-xl shadow-soft border text-sm font-semibold transition',
-        active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 hover:bg-slate-50'
-      )}">
-      ${label}
-      <span class="${cx('ml-2 text-xs', active ? 'text-white/80' : 'text-slate-500')}">(${newM}% / ${renM}%)</span>
-    </button>
+    ${stepper(1)}
+    ${tierStep()}
+
+    ${stepper(2)}
+    ${productBrowser()}
+
+    ${primaryCtaBar(m)}
   `;
 }
 
-function renderRow(it){
-  // IMPORTANT: options must be join('') to avoid commas/text nodes breaking selection in some browsers.
-  const options = Object.entries(PRODUCTS).map(([k,v]) =>
-    `<option value="${k}" ${it.productKey===k?'selected':''}>${v.name}</option>`
-  ).join('');
+function stepper(n){
+  const steps = [
+    { num: 1, label: 'Partner tier' },
+    { num: 2, label: 'Add products' },
+    { num: 3, label: 'Show estimate' },
+  ];
 
-  const supportDisabled = it.userMode;
-  const supportLabel = supportDisabled ? '—' : (it.addSupport ? 'Premium' : '—');
+  const pill = (s) => {
+    const active = s.num === n;
+    const done = s.num < n;
+    return `
+      <div class="flex items-center gap-2">
+        <div class="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold ${cx(
+          done ? 'bg-emerald-600 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
+        )}">
+          ${done ? '<i data-lucide="check" class="w-4 h-4"></i>' : s.num}
+        </div>
+        <div class="text-sm font-semibold ${active ? 'text-slate-900' : 'text-slate-600'}">${s.label}</div>
+      </div>
+    `;
+  };
 
   return `
-    <tr data-item="${it.id}">
-      <td class="px-5 py-4">
-        <select data-action="change-product"
-          class="w-full max-w-[520px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/30">
-          ${options}
-        </select>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-          <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">
-            ${it.userMode ? 'Pricing: per user (min 250)' : 'Pricing: per endpoint'}
-          </span>
-          ${(!it.userMode && it.platformWaived) ? `<span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">Platform waived</span>` : ``}
+    <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-soft">
+      <div class="flex flex-wrap gap-4 items-center justify-between">
+        ${steps.map(pill).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function tierStep(){
+  if(STATE.tier && STATE.tierLocked){
+    return `
+      <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold">Selected tier</h3>
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs font-semibold">
+                <i data-lucide="lock" class="w-3.5 h-3.5"></i> Locked
+              </span>
+            </div>
+          </div>
+          <button data-action="change-tier" class="text-sm font-semibold text-blue-600 hover:text-blue-700">Change tier</button>
         </div>
-      </td>
 
-      <td class="px-5 py-4">
-        <div class="flex items-center gap-2">
-          <input data-action="edit-qty" value="${it.qty}"
-            class="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-right mono focus:outline-none focus:ring-2 focus:ring-blue-600/30"
-            inputmode="numeric" pattern="[0-9]*" />
-          <div class="text-xs text-slate-600">${it.qtyLabel}</div>
+        <div class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <div class="text-lg font-bold">${STATE.tier.label}</div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            ${STATE.tier.bullets.map(b => `<span class="text-xs font-semibold rounded-full bg-white/70 px-2 py-1">${b}</span>`).join('')}
+          </div>
+          <div class="text-xs text-blue-700 mt-3">Exact discounts are shown only after you generate an estimate.</div>
         </div>
-      </td>
+      </div>
+    `;
+  }
 
-      <td class="px-5 py-4">
-        <label class="inline-flex items-center gap-2 select-none">
-          <input type="checkbox" data-action="toggle-support"
-            class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-            ${it.addSupport ? 'checked' : ''}
-            ${supportDisabled ? 'disabled' : ''}>
-          <span class="${supportDisabled ? 'text-slate-400' : 'text-slate-700'}">${supportLabel}</span>
-        </label>
-        ${supportDisabled ? `<div class="text-xs text-slate-400 mt-1">Premium support not available in AW per-user model</div>` : ``}
-      </td>
+  const card = (t) => `
+    <button data-action="select-tier" data-tier="${t.id}"
+      class="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-soft hover:bg-slate-50 transition">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="text-lg font-bold">${t.label}</div>
+          <div class="mt-2 space-y-1">
+            ${t.bullets.slice(0,2).map(b => `<div class="text-sm text-slate-700">• ${b}</div>`).join('')}
+          </div>
+          <div class="mt-3 text-xs text-slate-500"> Full Partner Margin & Support for first 5 deals*</div>
+        </div>
+        <div class="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </button>
+  `;
 
-      <td class="px-5 py-4 font-semibold mono">${money(it.msrp)}</td>
-      <td class="px-5 py-4 mono">${money(it.partnerNew)}</td>
-      <td class="px-5 py-4 mono">${money(it.partnerRen)}</td>
+  return `
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
+      <h3 class="font-semibold">Step 1 — Select Partner Margin Tier</h3>
 
-      <td class="px-5 py-4 text-right">
-        <button data-action="remove-item"
-          class="${cx(
-            'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border shadow-soft',
-            STATE.items.length===1 ? 'text-slate-400 border-slate-200 bg-slate-50 cursor-not-allowed' : 'text-red-700 border-red-200 bg-red-50 hover:bg-red-100'
-          )}"
-          ${STATE.items.length===1 ? 'disabled' : ''}>
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
-          Remove
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        ${TIERS_UI.map(card).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function productBrowser(){
+  const disabled = !STATE.tier;
+
+  const card = (p) => {
+    const meta = PRODUCTS[p.key];
+    const min = meta?.minTotal ?? 0;
+
+    return `
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft ${disabled ? 'opacity-60' : ''}">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="font-bold">${meta.name}</div>
+            <div class="text-sm text-slate-600 mt-1">${p.desc}</div>
+            <div class="text-sm text-slate-700 mt-3">
+              <span class="text-slate-500">From</span>
+              <span class="font-semibold mono">${money(min)}</span>
+              <span class="text-slate-500">/yr</span>
+            </div>
+          </div>
+          <button data-action="open-add" data-product="${p.key}" ${disabled ? 'disabled' : ''}
+            class="shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-soft border ${cx(
+              disabled ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+            )}">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add
+          </button>
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
+      <h3 class="font-semibold">Step 2 — Add products</h3>
+
+      ${disabled ? `
+        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          Select a partner tier to unlock product selection.
+        </div>
+      ` : ''}
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${PRODUCT_CATALOG.map(card).join('')}
+      </div>
+
+      ${STATE.items.length ? `
+      ` : ''}
+    </div>
+  `;
+}
+
+function primaryCtaBar(m){
+  const disabled = !STATE.tier || STATE.items.length === 0;
+  return `
+    <div class="sticky bottom-4">
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-softer">
+        <button data-action="show-estimate" ${disabled ? 'disabled' : ''}
+          class="w-full rounded-2xl px-4 py-3 text-base font-bold shadow-soft transition ${cx(
+            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+          )}">
+          Show Pricing Estimate
         </button>
-      </td>
-    </tr>
+      </div>
+    </div>
+  `;
+}
+
+/* -----------------------
+   QUOTE MODE
+----------------------- */
+function quoteModeMain(m){
+  const viewBtn = (k, label) => {
+    const active = STATE.quoteView === k;
+    return `
+      <button data-action="set-view" data-view="${k}"
+        class="px-3 py-2 rounded-xl text-sm font-semibold border shadow-soft transition ${cx(
+          active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'
+        )}">
+        ${label}
+      </button>
+    `;
+  };
+
+  const subtotalView = (STATE.quoteView === 'msrp') ? m.totals.msrp : (STATE.quoteView === 'ren') ? m.totals.ren : m.totals.new;
+  const discount = Math.max(0, m.totals.msrp - subtotalView);
+
+  const secondaryLine = () => {
+    if(STATE.quoteView === 'new') return `<div class="text-xs text-slate-500">Renewal total: <span class="mono font-semibold">${money(m.totals.ren)}</span></div>`;
+    if(STATE.quoteView === 'ren') return `<div class="text-xs text-slate-500">Net new total: <span class="mono font-semibold">${money(m.totals.new)}</span></div>`;
+    return `
+      <div class="text-xs text-slate-500">Partner Net New: <span class="mono font-semibold">${money(m.totals.new)}</span> · Renewal: <span class="mono font-semibold">${money(m.totals.ren)}</span></div>
+    `;
+  };
+
+  const rows = m.items.map(it => {
+    const line = priceForView(it, STATE.quoteView);
+    const unit = it.qty ? (line / it.qty) : 0;
+
+    const bundleTag = it.bundleApplied ? ' · RCT bundle -25%' : '';
+    const config = it.userMode
+      ? `Per user (min 250) · Platform waived · Premium support —${bundleTag}`
+      : `Per endpoint · Platform ${it.platformWaived ? 'waived' : money(it.platformFeeApplied)} · Premium support ${it.addSupport ? 'on' : 'off'}${bundleTag}`;
+
+    return `
+      <tr class="align-top" data-item="${it.id}">
+        <td class="px-5 py-4">
+          <div class="font-semibold">${it.productName}</div>
+          <div class="text-xs text-slate-500 mt-1">${config}</div>
+        </td>
+
+        <td class="px-5 py-4">
+          <div class="flex items-center gap-2">
+            <input data-action="edit-qty" value="${it.qty}"
+              class="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-right mono focus:outline-none focus:ring-2 focus:ring-blue-600/30"
+              inputmode="numeric" pattern="[0-9]*" />
+            <div class="text-xs text-slate-600">${it.qtyLabel}</div>
+          </div>
+        </td>
+
+        <td class="px-5 py-4">
+          <label class="inline-flex items-center gap-2 select-none">
+            <input type="checkbox" data-action="toggle-support"
+              class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+              ${it.addSupport ? 'checked' : ''}
+              ${it.userMode ? 'disabled' : ''}>
+            <span class="text-sm ${it.userMode ? 'text-slate-400' : 'text-slate-700'}">Premium</span>
+          </label>
+          ${it.userMode ? `<div class="text-xs text-slate-400 mt-1">Not available in AW per-user model</div>` : ``}
+        </td>
+
+        <td class="px-5 py-4 text-right mono">${money(unit)}</td>
+        <td class="px-5 py-4 text-right mono font-semibold">${money(line)}</td>
+        <td class="px-5 py-4 text-right">
+          <button data-action="remove-item" class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border shadow-soft text-red-700 border-red-200 bg-red-50 hover:bg-red-100">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Remove
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const pricingError = m.hasPricingIssue
+    ? `
+      <div class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        We couldn’t calculate pricing for one or more items. Please review your selections.
+      </div>
+    `
+    : '';
+
+  return `
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft fade-in">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold">Pricing Estimate</h2>
+        </div>
+        <button data-action="back-to-config" class="text-sm font-semibold text-blue-600 hover:text-blue-700">Back to configuration</button>
+      </div>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        ${viewBtn('new','Partner Net New')}
+        ${viewBtn('ren','Partner Renewal')}
+      </div>
+
+      ${pricingError}
+
+      <div class="mt-4 rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-slate-700">
+              <tr>
+                <th class="px-5 py-3 text-left font-semibold">Product</th>
+                <th class="px-5 py-3 text-left font-semibold">Quantity</th>
+                <th class="px-5 py-3 text-left font-semibold">Support</th>
+                <th class="px-5 py-3 text-right font-semibold">Unit price</th>
+                <th class="px-5 py-3 text-right font-semibold">Line total</th>
+                <th class="px-5 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-white border-t border-slate-200 p-5">
+          <div class="grid gap-2 text-sm mono">
+            <div class="flex justify-between"><span class="text-slate-600">Subtotal (MSRP)</span><span class="font-semibold">${money(m.totals.msrp)}</span></div>
+            <div class="flex justify-between"><span class="text-slate-600">Partner discount</span><span class="font-semibold">${money(discount)}</span></div>
+            <div class="flex justify-between text-base"><span class="font-bold">Estimated total</span><span class="font-bold">${money(subtotalView)}</span></div>
+            ${secondaryLine()}
+          </div>
+
+          <!-- Post-estimate actions: ONLY keep Copy quote text -->
+          <div class="mt-5 flex flex-wrap gap-2">
+            <button data-action="copy-quote" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 shadow-soft">
+              <i data-lucide="clipboard-copy" class="w-4 h-4"></i> Copy quote text
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* -----------------------
+   SUMMARY PANEL
+----------------------- */
+function summaryContent(m, { mobile } = { mobile:false }){
+  const tierLine = () => {
+    if(!STATE.tier) return `<div class="text-sm text-slate-500">No tier selected yet.</div>`;
+    return `
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="text-sm text-slate-500">Partner tier</div>
+          <div class="font-semibold">${STATE.tier.label}</div>
+        </div>
+        <button data-action="change-tier" class="text-sm font-semibold text-blue-600 hover:text-blue-700">Change</button>
+      </div>
+    `;
+  };
+
+  const itemsList = () => {
+    if(!STATE.items.length){
+      return `
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          Add products to build your estimate.
+        </div>
+      `;
+    }
+
+    const rows = m.items.map(it => `
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${it.productName}</div>
+            <div class="text-xs text-slate-500 mt-1">${formatQty(it.qty)} ${it.qtyLabel}${it.addSupport ? ' · Premium support' : ''}${it.bundleApplied ? ' · RCT bundle -25%' : ''}</div>
+            ${STATE.quoteMode ? `
+              <div class="text-xs text-slate-600 mt-2 mono">${STATE.quoteView==='msrp'?'MSRP':'Estimate'}: <span class="font-semibold">${money(priceForView(it, STATE.quoteView))}</span></div>
+            ` : `
+              <div class="text-xs text-slate-400 mt-2">Pricing appears after you generate the estimate.</div>
+            `}
+          </div>
+          <div class="flex flex-col gap-2 shrink-0">
+            <button data-action="edit-item" data-id="${it.id}" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-soft px-3 py-2 text-xs font-semibold">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+            <button data-action="remove-item" data-id="${it.id}" class="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 shadow-soft px-3 py-2 text-xs font-semibold text-red-700">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    return `<div class="space-y-2">${rows}</div>`;
+  };
+
+  const totals = () => {
+    if(!STATE.quoteMode){
+      return `
+        <div class="mt-4 text-sm text-slate-500">
+          Pricing will appear once you generate estimate.
+        </div>
+      `;
+    }
+
+    const subtotalView = (STATE.quoteView === 'msrp') ? m.totals.msrp : (STATE.quoteView === 'ren') ? m.totals.ren : m.totals.new;
+
+    return `
+      <div class="mt-4 space-y-2 text-sm mono">
+        <div class="flex justify-between"><span class="text-slate-600">MSRP subtotal</span><span class="font-semibold">${money(m.totals.msrp)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-600">Estimated total</span><span class="font-semibold">${money(subtotalView)}</span></div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="space-y-4">
+      ${tierLine()}
+
+      <div>
+        <div class="text-sm text-slate-500">Products</div>
+        <div class="mt-2">${itemsList()}</div>
+      </div>
+
+      ${totals()}
+    </div>
+  `;
+}
+
+function desktopSummary(m){
+  return `
+    <div class="sticky top-24 hidden lg:block">
+      <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-soft">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="font-semibold">Summary</h3>
+            <p class="text-sm text-slate-600 mt-1">${STATE.items.length} item(s)</p>
+          </div>
+        </div>
+
+        <div class="mt-5">
+          ${summaryContent(m)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function mobileDrawer(m){
+  const closed = !STATE.drawerOpen;
+  const totalLine = STATE.quoteMode
+    ? (STATE.quoteView === 'msrp') ? m.totals.msrp : (STATE.quoteView === 'ren') ? m.totals.ren : m.totals.new
+    : null;
+
+  return `
+    <div class="lg:hidden">
+      <div class="fixed bottom-0 left-0 right-0 z-30">
+        <div class="bg-white border-t border-slate-200 shadow-softer">
+          <button data-action="toggle-drawer" class="w-full px-5 py-3 flex items-center justify-between">
+            <div class="text-left">
+              <div class="text-sm font-semibold">Summary</div>
+              <div class="text-xs text-slate-600">${STATE.items.length} item(s)${STATE.quoteMode ? ` · ${money(totalLine)}` : ''}</div>
+            </div>
+            <i data-lucide="${closed ? 'chevron-up' : 'chevron-down'}" class="w-5 h-5 text-slate-600"></i>
+          </button>
+
+          <div class="${closed ? 'hidden' : ''}">
+            <div class="px-5 pb-5">
+              ${summaryContent(m, { mobile:true })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* -----------------------
+   MODALS
+----------------------- */
+function modal(){
+  if(!STATE.modal) return '';
+  const m = STATE.modal;
+  if(m.type !== 'config') return '';
+
+  const meta = PRODUCTS[m.draft.productKey];
+  const aw = isAW(m.draft.productKey);
+
+  const qtyLabel = aw ? 'Users' : 'Endpoints';
+  const supportDisabled = aw;
+
+  return `
+    <div class="fixed inset-0 z-50">
+      <div data-action="close-modal" class="absolute inset-0 bg-black/40"></div>
+      <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-softer p-5 fade-in">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="text-sm text-slate-500">Configure</div>
+              <div class="text-lg font-bold">${meta.name}</div>
+            </div>
+            <button data-action="close-modal" class="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-soft p-2">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="block">
+              <div class="text-sm font-semibold">Quantity</div>
+              <div class="text-xs text-slate-500 mt-1">${aw ? 'Minimum 250 users' : 'Endpoints licensed'}.</div>
+              <div class="mt-2 flex items-center gap-2">
+                <input data-action="modal-qty" value="${int(m.draft.qtyText) || defaultQtyFor(m.draft.productKey)}"
+                  class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-right mono focus:outline-none focus:ring-2 focus:ring-blue-600/30"
+                  inputmode="numeric" pattern="[0-9]*" />
+                <div class="text-xs text-slate-600">${qtyLabel}</div>
+              </div>
+            </label>
+
+            <label class="block">
+              <div class="text-sm font-semibold">Premium support</div>
+              <div class="text-xs text-slate-500 mt-1">Adds 20% (min $6,000) to the line.</div>
+              <div class="mt-3">
+                <label class="inline-flex items-center gap-2 select-none">
+                  <input type="checkbox" data-action="modal-support"
+                    class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                    ${m.draft.addSupport ? 'checked' : ''}
+                    ${supportDisabled ? 'disabled' : ''}>
+                  <span class="text-sm ${supportDisabled ? 'text-slate-400' : 'text-slate-700'}">Enable</span>
+                </label>
+                ${supportDisabled ? `<div class="text-xs text-slate-400 mt-2">Not available in AW per-user model</div>` : ``}
+              </div>
+            </label>
+          </div>
+
+          <div class="mt-5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <button data-action="close-modal" class="rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 shadow-soft">Cancel</button>
+              <button data-action="save-modal" class="rounded-xl px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-soft">
+                ${m.editId ? 'Save changes' : 'Add to cart'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function confirmTierModal(){
+  if(!STATE.confirmTier) return '';
+  const next = STATE.confirmTier.nextTier;
+
+  return `
+    <div class="fixed inset-0 z-50">
+      <div class="absolute inset-0 bg-black/40"></div>
+      <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-softer p-5 fade-in">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="text-lg font-bold">Change partner tier?</div>
+              <div class="text-sm text-slate-600 mt-1">Changing tier will update pricing for all products.</div>
+            </div>
+            <button data-action="cancel-tier" class="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-soft p-2">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="text-sm text-slate-500">New tier</div>
+            <div class="text-base font-semibold">${next.label}</div>
+          </div>
+
+          <div class="mt-5 flex justify-end gap-2">
+            <button data-action="cancel-tier" class="rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 shadow-soft">Cancel</button>
+            <button data-action="confirm-tier" class="rounded-xl px-4 py-2 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-soft">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -418,7 +998,7 @@ function toast(){
   if(!STATE.toast) return '';
   const ok = STATE.toast.type === 'success';
   return `
-    <div class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60]">
+    <div class="fixed bottom-24 lg:bottom-5 left-1/2 -translate-x-1/2 z-[60]">
       <div class="${cx(
         'rounded-2xl px-4 py-3 text-sm font-semibold shadow-softer border backdrop-blur',
         ok ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200' : 'bg-red-50/90 text-red-800 border-red-200'
@@ -440,33 +1020,183 @@ function findRow(el){
   return { id, item };
 }
 
+function itemById(id){
+  return STATE.items.find(x => x.id === id) || null;
+}
+
+function openConfigModal({ productKey, editId }){
+  const existing = editId ? itemById(editId) : null;
+  const draft = existing
+    ? { productKey: existing.productKey, qtyText: existing.qtyText, addSupport: !!existing.addSupport }
+    : { productKey, qtyText: String(defaultQtyFor(productKey)), addSupport: false };
+
+  if(isAW(draft.productKey)){
+    draft.addSupport = false;
+    draft.qtyText = String(Math.max(250, int(draft.qtyText)));
+  }
+
+  STATE.modal = { type: 'config', draft, editId: editId || null };
+  render();
+}
+
+function closeModal(){
+  STATE.modal = null;
+  render();
+}
+
+function requestTierChange(nextTier){
+  if(STATE.items.length){
+    STATE.confirmTier = { nextTier };
+    render();
+    return;
+  }
+  STATE.tier = nextTier;
+  STATE.tierLocked = true;
+  render();
+  setToast('success','Partner tier selected.');
+}
+
+function setTier(nextTier){
+  STATE.tier = nextTier;
+  STATE.tierLocked = true;
+}
+
+function handleChangeTierIntent(){
+  STATE.tierLocked = false;
+  render();
+}
+
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
   if(!btn) return;
   const action = btn.getAttribute('data-action');
 
-  if(action === 'add-item'){
-    STATE.items.push({ id: randomId(), productKey: 'rct', qtyText: '1000', addSupport: false, pricingModel: 'endpoint' });
+  if(action === 'toggle-drawer'){
+    setDrawer(!STATE.drawerOpen);
+    return;
+  }
+
+  if(action === 'select-tier'){
+    const id = +btn.getAttribute('data-tier');
+    const nextTier = TIERS_UI.find(t => t.id === id);
+    if(!nextTier) return;
+
+    if(STATE.tier && STATE.tierLocked && (STATE.tier.id !== nextTier.id)){
+      requestTierChange(nextTier);
+    } else {
+      setTier(nextTier);
+      render();
+      setToast('success','Partner tier selected.');
+    }
+    return;
+  }
+
+  if(action === 'change-tier'){
+    handleChangeTierIntent();
+    return;
+  }
+
+  if(action === 'confirm-tier'){
+    const next = STATE.confirmTier?.nextTier;
+    STATE.confirmTier = null;
+    if(next){
+      setTier(next);
+      render();
+      setToast('success','Partner tier updated.');
+    } else {
+      render();
+    }
+    return;
+  }
+
+  if(action === 'cancel-tier'){
+    STATE.confirmTier = null;
     render();
-    setToast('success','Added product.');
+    return;
+  }
+
+  if(action === 'open-add'){
+    const productKey = btn.getAttribute('data-product');
+    if(!PRODUCTS[productKey] || !STATE.tier) return;
+    openConfigModal({ productKey });
+    return;
+  }
+
+  if(action === 'close-modal'){
+    closeModal();
+    return;
+  }
+
+  if(action === 'save-modal'){
+    const modal = STATE.modal;
+    if(!modal || modal.type !== 'config') return;
+
+    const pk = modal.draft.productKey;
+    let q = int(modal.draft.qtyText);
+    if(isAW(pk)) q = Math.max(250, q);
+    const addSupport = !!modal.draft.addSupport && !isAW(pk);
+
+    if(modal.editId){
+      const it = itemById(modal.editId);
+      if(it){
+        it.productKey = pk;
+        it.qtyText = String(q);
+        it.addSupport = addSupport;
+      }
+      closeModal();
+      setToast('success','Updated item.');
+      return;
+    }
+
+    STATE.items.push({ id: randomId(), productKey: pk, qtyText: String(q), addSupport });
+    closeModal();
+    setToast('success','Added to cart.');
+    return;
+  }
+
+  if(action === 'edit-item'){
+    const id = btn.getAttribute('data-id');
+    if(!id) return;
+    const it = itemById(id);
+    if(!it) return;
+    openConfigModal({ productKey: it.productKey, editId: id });
     return;
   }
 
   if(action === 'remove-item'){
-    if(STATE.items.length <= 1) return;
-    const row = findRow(btn);
+    const explicitId = btn.getAttribute('data-id');
+    const row = explicitId ? { id: explicitId, item: itemById(explicitId) } : findRow(btn);
     if(!row?.item) return;
+
     STATE.items = STATE.items.filter(x => x.id !== row.id);
+    if(STATE.items.length === 0) STATE.quoteMode = false;
+
     render();
     setToast('success','Removed item.');
     return;
   }
 
-  if(action === 'set-tier'){
-    STATE.partnerNewMargin = +btn.getAttribute('data-new');
-    STATE.partnerRenMargin = +btn.getAttribute('data-ren');
+  if(action === 'show-estimate'){
+    if(!STATE.tier || STATE.items.length === 0) return;
+    STATE.quoteMode = true;
+    STATE.quoteView = 'new';
     render();
-    setToast('success','Partner tier updated.');
+    setToast('success','Pricing estimate generated.');
+    return;
+  }
+
+  if(action === 'back-to-config'){
+    STATE.quoteMode = false;
+    render();
+    return;
+  }
+
+  if(action === 'set-view'){
+    const v = btn.getAttribute('data-view');
+    if(['new','ren','msrp'].includes(v)){
+      STATE.quoteView = v;
+      render();
+    }
     return;
   }
 
@@ -478,37 +1208,33 @@ document.addEventListener('click', async (e) => {
     else setToast('error','Copy failed (browser blocked clipboard).');
     return;
   }
-});
 
-document.addEventListener('change', (e) => {
-  const el = e.target;
-  const action = el.getAttribute('data-action');
-  if(!action) return;
-
-  const row = findRow(el);
-  if(!row?.item) return;
-
-  if(action === 'change-product'){
-    row.item.productKey = el.value;
-    // enforce AW model rules
-    if(isAW(row.item.productKey)){
-      row.item.pricingModel = 'user';
-      row.item.addSupport = false;
-      if(int(row.item.qtyText) < 250) row.item.qtyText = '250';
-    } else {
-      row.item.pricingModel = 'endpoint';
-    }
-    render();
+  if(action === 'copy-link'){
+    const url = buildShareUrl();
+    const ok = await copyToClipboard(url);
+    if(ok) setToast('success','Shareable link copied.');
+    else setToast('error','Copy failed (browser blocked clipboard).');
     return;
   }
 
-  if(action === 'toggle-support'){
-    if(isAW(row.item.productKey)){
-      row.item.addSupport = false;
-    } else {
-      row.item.addSupport = !!el.checked;
-    }
-    render();
+  if(action === 'download-pdf'){
+    window.print();
+    return;
+  }
+
+  if(action === 'email-estimate'){
+    const text = buildQuoteText(model());
+    const subject = encodeURIComponent('Recast pricing estimate');
+    const body = encodeURIComponent(text.slice(0, 18000));
+    location.href = `mailto:?subject=${subject}&body=${body}`;
+    return;
+  }
+
+  if(action === 'request-quote'){
+    const text = buildQuoteText(model());
+    const subject = encodeURIComponent('Request formal quote — Recast estimate');
+    const body = encodeURIComponent(`Please generate a formal quote based on the estimate below.\n\n${text}`.slice(0, 18000));
+    location.href = `mailto:?subject=${subject}&body=${body}`;
     return;
   }
 });
@@ -516,43 +1242,92 @@ document.addEventListener('change', (e) => {
 document.addEventListener('input', (e) => {
   const el = e.target;
   const action = el.getAttribute('data-action');
-  if(action !== 'edit-qty') return;
 
-  const row = findRow(el);
-  if(!row?.item) return;
+  if(action === 'edit-qty'){
+    const row = findRow(el);
+    if(!row?.item) return;
 
-  row.item.qtyText = digitsOnly(el.value);
+    row.item.qtyText = digitsOnly(el.value);
 
-  // re-render totals while keeping typing stable
-  const caret = row.item.qtyText.length;
-  render();
-  const next = document.querySelector(`[data-item="${row.id}"] [data-action="edit-qty"]`);
-  if(next){
-    next.focus();
-    try { next.setSelectionRange(caret, caret); } catch {}
+    const caret = row.item.qtyText.length;
+    render();
+    const next = document.querySelector(`[data-item="${row.id}"] [data-action="edit-qty"]`);
+    if(next){
+      next.focus();
+      try { next.setSelectionRange(caret, caret); } catch {}
+    }
+    return;
+  }
+
+  if(action === 'modal-qty'){
+    if(!STATE.modal || STATE.modal.type !== 'config') return;
+    STATE.modal.draft.qtyText = digitsOnly(el.value);
+    return;
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  const action = el.getAttribute('data-action');
+  if(!action) return;
+
+  if(action === 'toggle-support'){
+    const row = findRow(el);
+    if(!row?.item) return;
+
+    if(isAW(row.item.productKey)){
+      row.item.addSupport = false;
+    } else {
+      row.item.addSupport = !!el.checked;
+    }
+
+    render();
+    return;
+  }
+
+  if(action === 'modal-support'){
+    if(!STATE.modal || STATE.modal.type !== 'config') return;
+    if(isAW(STATE.modal.draft.productKey)){
+      STATE.modal.draft.addSupport = false;
+    } else {
+      STATE.modal.draft.addSupport = !!el.checked;
+    }
+    return;
   }
 });
 
 document.addEventListener('blur', (e) => {
   const el = e.target;
   const action = el.getAttribute('data-action');
-  if(action !== 'edit-qty') return;
 
-  const row = findRow(el);
-  if(!row?.item) return;
+  if(action === 'edit-qty'){
+    const row = findRow(el);
+    if(!row?.item) return;
 
-  // normalize on blur (incl AW min 250)
-  let q = int(row.item.qtyText);
-  if(isAW(row.item.productKey)) q = Math.max(250, q);
-  row.item.qtyText = String(q);
-  render();
+    let q = int(row.item.qtyText);
+    if(isAW(row.item.productKey)) q = Math.max(250, q);
+    row.item.qtyText = String(q || defaultQtyFor(row.item.productKey));
+    render();
+    return;
+  }
+
+  if(action === 'modal-qty'){
+    if(!STATE.modal || STATE.modal.type !== 'config') return;
+    let q = int(STATE.modal.draft.qtyText);
+    if(isAW(STATE.modal.draft.productKey)) q = Math.max(250, q);
+    STATE.modal.draft.qtyText = String(q || defaultQtyFor(STATE.modal.draft.productKey));
+    render();
+    return;
+  }
 }, true);
 
 /* =======================
    INIT
 ======================= */
 document.addEventListener('DOMContentLoaded', () => {
+  readShareFromUrl();
   render();
+
   if(!window.tailwind){
     const b=document.createElement('div');
     b.role='alert';
